@@ -208,6 +208,7 @@ export class HeapImpl implements CompileTimeHeap, RuntimeHeap {
     for (let i = 0; i < length; i += Size.ENTRY_SIZE) {
       let offset = table[i];
       let info = table[i + Size.INFO_OFFSET];
+      // @ts-ignore (this whole function is currently unused)
       let size = info & Size.SIZE_MASK;
       let state = info & (Size.STATE_MASK >> 30);
 
