@@ -11,8 +11,18 @@ import {
   CursorStackSymbol,
   UpdatableBlock,
   Cursor,
+  ModifierManager,
 } from '@glimmer/interfaces';
-import { assert, DESTROY, expect, LinkedList, LinkedListNode, Option, Stack } from '@glimmer/util';
+import {
+  assert,
+  DESTROY,
+  expect,
+  LinkedList,
+  LinkedListNode,
+  Option,
+  Stack,
+  Maybe,
+} from '@glimmer/util';
 import {
   AttrNamespace,
   SimpleComment,
@@ -80,6 +90,7 @@ export class NewElementBuilder implements ElementBuilder {
   private env: Environment;
 
   [CURSOR_STACK] = new Stack<Cursor>();
+  private modifierStack = new Stack<Option<[ModifierManager, unknown][]>>();
   private blockStack = new Stack<LiveBlock>();
 
   static forInitialRender(env: Environment, cursor: CursorImpl) {
@@ -177,7 +188,7 @@ export class NewElementBuilder implements ElementBuilder {
     return this.dom.createElement(tag, this.element);
   }
 
-  flushElement() {
+  flushElement(modifiers: Option<[ModifierManager, unknown][]>) {
     let parent = this.element;
     let element = expect(
       this.constructing,
@@ -189,6 +200,7 @@ export class NewElementBuilder implements ElementBuilder {
     this.constructing = null;
     this.operations = null;
 
+    this.pushModifiers(modifiers);
     this.pushElement(element, null);
     this.didOpenElement(element);
   }
@@ -197,26 +209,35 @@ export class NewElementBuilder implements ElementBuilder {
     this.dom.insertBefore(parent, constructing, this.nextSibling);
   }
 
-  closeElement() {
+  closeElement(): Option<[ModifierManager, unknown][]> {
     this.willCloseElement();
     this.popElement();
+    return this.popModifiers();
   }
 
   pushRemoteElement(
     element: SimpleElement,
     guid: string,
-    nextSibling: Option<SimpleNode> = null
+    insertBefore: Maybe<SimpleNode>
   ): Option<RemoteLiveBlock> {
-    return this.__pushRemoteElement(element, guid, nextSibling);
+    return this.__pushRemoteElement(element, guid, insertBefore);
   }
 
   __pushRemoteElement(
     element: SimpleElement,
     _guid: string,
-    nextSibling: Option<SimpleNode>
+    insertBefore: Maybe<SimpleNode>
   ): Option<RemoteLiveBlock> {
-    this.pushElement(element, nextSibling);
+    this.pushElement(element, insertBefore);
+
+    if (insertBefore === undefined) {
+      while (element.lastChild) {
+        element.removeChild(element.lastChild);
+      }
+    }
+
     let block = new RemoteLiveBlock(element);
+
     return this.pushLiveBlock(block, true);
   }
 
@@ -225,8 +246,16 @@ export class NewElementBuilder implements ElementBuilder {
     this.popElement();
   }
 
-  protected pushElement(element: SimpleElement, nextSibling: Option<SimpleNode>) {
+  protected pushElement(element: SimpleElement, nextSibling: Maybe<SimpleNode> = null) {
     this[CURSOR_STACK].push(new CursorImpl(element, nextSibling));
+  }
+
+  private pushModifiers(modifiers: Option<[ModifierManager, unknown][]>): void {
+    this.modifierStack.push(modifiers);
+  }
+
+  private popModifiers(): Option<[ModifierManager, unknown][]> {
+    return this.modifierStack.pop();
   }
 
   didAppendBounds(bounds: Bounds): Bounds {

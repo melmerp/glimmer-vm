@@ -30,6 +30,29 @@ export class InElementSuite extends RenderTest {
   }
 
   @test
+  'clears existing content'() {
+    let externalElement = this.delegate.createElement('div');
+    let initialContent = '<p>Hello there!</p>';
+    replaceHTML(externalElement, initialContent);
+
+    this.render('{{#in-element externalElement}}[{{foo}}]{{/in-element}}', {
+      externalElement,
+      foo: 'Yippie!',
+    });
+
+    equalsElement(externalElement, 'div', {}, '[Yippie!]');
+    this.assertStableRerender();
+
+    this.rerender({ foo: 'Double Yups!' });
+    equalsElement(externalElement, 'div', {}, '[Double Yups!]');
+    this.assertStableNodes();
+
+    this.rerender({ foo: 'Yippie!' });
+    equalsElement(externalElement, 'div', {}, '[Yippie!]');
+    this.assertStableNodes();
+  }
+
+  @test
   'Changing to falsey'() {
     let first = this.delegate.createElement('div');
     let second = this.delegate.createElement('div');
@@ -79,10 +102,13 @@ export class InElementSuite extends RenderTest {
     let initialContent = '<p>Hello there!</p>';
     replaceHTML(externalElement, initialContent);
 
-    this.render(stripTight`{{#in-element externalElement}}[{{foo}}]{{/in-element}}`, {
-      externalElement,
-      foo: 'Yippie!',
-    });
+    this.render(
+      stripTight`{{#in-element externalElement insertBefore=null}}[{{foo}}]{{/in-element}}`,
+      {
+        externalElement,
+        foo: 'Yippie!',
+      }
+    );
 
     equalsElement(externalElement, 'div', {}, `${initialContent}[Yippie!]`);
     this.assertHTML('<!---->');
@@ -105,13 +131,13 @@ export class InElementSuite extends RenderTest {
   }
 
   @test
-  'With nextSibling'() {
+  'With insertBefore'() {
     let externalElement = this.delegate.createElement('div');
     replaceHTML(externalElement, '<b>Hello</b><em>there!</em>');
 
     this.render(
-      stripTight`{{#in-element externalElement nextSibling=nextSibling}}[{{foo}}]{{/in-element}}`,
-      { externalElement, nextSibling: externalElement.lastChild, foo: 'Yippie!' }
+      stripTight`{{#in-element externalElement insertBefore=insertBefore}}[{{foo}}]{{/in-element}}`,
+      { externalElement, insertBefore: externalElement.lastChild, foo: 'Yippie!' }
     );
 
     equalsElement(externalElement, 'div', {}, '<b>Hello</b>[Yippie!]<em>there!</em>');
@@ -123,7 +149,7 @@ export class InElementSuite extends RenderTest {
     this.assertHTML('<!---->');
     this.assertStableNodes();
 
-    this.rerender({ nextSibling: null });
+    this.rerender({ insertBefore: null });
     equalsElement(externalElement, 'div', {}, '<b>Hello</b><em>there!</em>[Double Yips!]');
     this.assertHTML('<!---->');
     this.assertStableRerender();
@@ -133,7 +159,7 @@ export class InElementSuite extends RenderTest {
     this.assertHTML('<!---->');
     this.assertStableRerender();
 
-    this.rerender({ externalElement, nextSibling: externalElement.lastChild, foo: 'Yippie!' });
+    this.rerender({ externalElement, insertBefore: externalElement.lastChild, foo: 'Yippie!' });
     equalsElement(externalElement, 'div', {}, '<b>Hello</b>[Yippie!]<em>there!</em>');
     this.assertHTML('<!---->');
     this.assertStableRerender();

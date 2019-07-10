@@ -7,9 +7,8 @@ import {
   isConst,
   isConstTag,
 } from '@glimmer/reference';
-import { Option } from '@glimmer/util';
-import { check, CheckString, CheckElement, CheckNode, CheckOption } from '@glimmer/debug';
-import { Op } from '@glimmer/interfaces';
+import { check, CheckString, CheckElement, CheckOption, CheckNode } from '@glimmer/debug';
+import { Op, Option, ModifierManager } from '@glimmer/interfaces';
 import { $t0 } from '@glimmer/vm';
 import {
   ModifierDefinition,
@@ -23,6 +22,7 @@ import { DynamicAttribute } from '../../vm/attributes/dynamic';
 import { CheckReference, CheckArguments, CheckOperations } from './-debug-strip';
 import { CONSTANTS } from '../../symbols';
 import { SimpleElement, SimpleNode } from '@simple-dom/interface';
+import { expect, Maybe } from '@glimmer/util';
 
 APPEND_OPCODES.add(Op.Text, (vm, { op1: text }) => {
   vm.elements().appendText(vm[CONSTANTS].getString(text));
@@ -43,11 +43,11 @@ APPEND_OPCODES.add(Op.OpenDynamicElement, vm => {
 
 APPEND_OPCODES.add(Op.PushRemoteElement, vm => {
   let elementRef = check(vm.stack.pop(), CheckReference);
-  let nextSiblingRef = check(vm.stack.pop(), CheckReference);
+  let insertBeforeRef = check(vm.stack.pop(), CheckReference);
   let guidRef = check(vm.stack.pop(), CheckReference);
 
   let element: SimpleElement;
-  let nextSibling: Option<SimpleNode>;
+  let insertBefore: Maybe<SimpleNode>;
   let guid = guidRef.value() as string;
 
   if (isConst(elementRef)) {
@@ -58,15 +58,17 @@ APPEND_OPCODES.add(Op.PushRemoteElement, vm => {
     vm.updateWith(new Assert(cache));
   }
 
-  if (isConst(nextSiblingRef)) {
-    nextSibling = check(nextSiblingRef.value(), CheckOption(CheckNode));
-  } else {
-    let cache = new ReferenceCache(nextSiblingRef as Reference<Option<SimpleNode>>);
-    nextSibling = check(cache.peek(), CheckOption(CheckNode));
-    vm.updateWith(new Assert(cache));
+  if (insertBeforeRef.value() !== undefined) {
+    if (isConst(insertBeforeRef)) {
+      insertBefore = check(insertBeforeRef.value(), CheckOption(CheckNode));
+    } else {
+      let cache = new ReferenceCache(insertBeforeRef as Reference<Option<SimpleNode>>);
+      insertBefore = check(cache.peek(), CheckOption(CheckNode));
+      vm.updateWith(new Assert(cache));
+    }
   }
 
-  let block = vm.elements().pushRemoteElement(element, guid, nextSibling);
+  let block = vm.elements().pushRemoteElement(element, guid, insertBefore);
   if (block) vm.associateDestroyable(block);
 });
 
@@ -76,33 +78,51 @@ APPEND_OPCODES.add(Op.PopRemoteElement, vm => {
 
 APPEND_OPCODES.add(Op.FlushElement, vm => {
   let operations = check(vm.fetchValue($t0), CheckOperations);
+  let modifiers: Option<[ModifierManager, unknown][]> = null;
 
   if (operations) {
-    operations.flush(vm);
+    modifiers = operations.flush(vm);
     vm.loadValue($t0, null);
   }
 
-  vm.elements().flushElement();
+  vm.elements().flushElement(modifiers);
 });
 
 APPEND_OPCODES.add(Op.CloseElement, vm => {
-  vm.elements().closeElement();
+  let modifiers = vm.elements().closeElement();
+
+  if (modifiers) {
+    modifiers.forEach(([manager, modifier]) => {
+      vm.env.scheduleInstallModifier(modifier, manager);
+      let d = manager.getDestructor(modifier);
+
+      if (d) {
+        vm.associateDestroyable(d);
+      }
+    });
+  }
 });
 
 APPEND_OPCODES.add(Op.Modifier, (vm, { op1: handle }) => {
   let { manager, state } = vm.runtime.resolver.resolve<ModifierDefinition>(handle);
   let stack = vm.stack;
   let args = check(stack.pop(), CheckArguments);
-  let { element, updateOperations } = vm.elements();
+  let { constructing, updateOperations } = vm.elements();
   let dynamicScope = vm.dynamicScope();
-  let modifier = manager.create(element, state, args, dynamicScope, updateOperations);
+  let modifier = manager.create(
+    expect(constructing, 'BUG: ElementModifier could not find the element it applies to'),
+    state,
+    args,
+    dynamicScope,
+    updateOperations
+  );
 
-  vm.env.scheduleInstallModifier(modifier, manager);
-  let d = manager.getDestructor(modifier);
+  let operations = expect(
+    check(vm.fetchValue($t0), CheckOperations),
+    'BUG: ElementModifier could not find operations to append to'
+  );
 
-  if (d) {
-    vm.associateDestroyable(d);
-  }
+  operations.addModifier(manager, modifier);
 
   let tag = manager.getTag(modifier);
 

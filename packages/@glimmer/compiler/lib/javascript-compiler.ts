@@ -2,7 +2,7 @@ import { assert } from '@glimmer/util';
 import { Stack, DictSet, Option, expect } from '@glimmer/util';
 import { AST } from '@glimmer/syntax';
 import { CompileOptions } from './template-compiler';
-import { isFlushElement, isArgument, isAttribute, isAttrSplat } from '@glimmer/wire-format';
+import { isArgument, isAttribute, isFlushElement } from '@glimmer/wire-format';
 import { Processor, CompilerOps, OpName, Op } from './compiler-ops';
 import {
   WireFormat,
@@ -94,8 +94,6 @@ export class ComponentBlock extends Block {
         this.arguments.push(statement);
       } else if (isAttribute(statement)) {
         this.attributes.push(statement);
-      } else if (isAttrSplat(statement)) {
-        this.attributes.push(statement);
       } else {
         throw new Error('Compile Error: only parameters allowed before flush-element');
       }
@@ -110,7 +108,6 @@ export class ComponentBlock extends Block {
 
   toJSON(): [string, Statements.Attribute[], Core.Hash, Core.Blocks] {
     let blocks: Core.Blocks;
-
     let args = this.arguments;
     let keys = args.map(arg => arg[1]);
     let values = args.map(arg => arg[2]);
@@ -205,7 +202,6 @@ export default class JavaScriptCompiler
       }
       (this[opcode] as any)(arg);
     });
-
     return this.template;
   }
 
@@ -243,7 +239,6 @@ export default class JavaScriptCompiler
   modifier(name: string) {
     let params = this.popValue<Params>();
     let hash = this.popValue<Hash>();
-
     this.push([SexpOpcodes.Modifier, name, params, hash]);
   }
 
@@ -288,7 +283,7 @@ export default class JavaScriptCompiler
     this.blocks.push(block);
   }
 
-  openSplattedElement(element: AST.ElementNode) {
+  openElement([element, simple]: [AST.ElementNode, boolean]) {
     let tag = element.tag;
 
     if (element.blockParams.length > 0) {
@@ -296,19 +291,7 @@ export default class JavaScriptCompiler
         `Compile Error: <${element.tag}> is not a component and doesn't support block parameters`
       );
     } else {
-      this.push([SexpOpcodes.OpenSplattedElement, tag]);
-    }
-  }
-
-  openElement(element: AST.ElementNode) {
-    let tag = element.tag;
-
-    if (element.blockParams.length > 0) {
-      throw new Error(
-        `Compile Error: <${element.tag}> is not a component and doesn't support block parameters`
-      );
-    } else {
-      this.push([SexpOpcodes.OpenElement, tag]);
+      this.push([SexpOpcodes.OpenElement, tag, simple]);
     }
   }
 
@@ -317,10 +300,6 @@ export default class JavaScriptCompiler
   }
 
   closeComponent(_element: AST.ElementNode) {
-    if (_element.modifiers.length > 0) {
-      throw new Error('Compile Error: Element modifiers are not allowed in components');
-    }
-
     let [tag, attrs, args, blocks] = this.endComponent();
 
     this.push([SexpOpcodes.Component, tag, attrs, args, blocks]);

@@ -57,6 +57,8 @@ export interface Block extends CommonProgram {
   symbols?: BlockSymbols;
 }
 
+export type EntityEncodingState = 'transformed' | 'raw';
+
 export interface Template extends CommonProgram {
   type: 'Template';
   symbols?: Symbols;
@@ -98,6 +100,7 @@ export interface MustacheStatement extends BaseNode {
   params: Expression[];
   hash: Hash;
   escaped: boolean;
+  strip: StripFlags;
 }
 
 export interface BlockStatement extends BaseNode {
@@ -107,6 +110,9 @@ export interface BlockStatement extends BaseNode {
   hash: Hash;
   program: Block;
   inverse?: Option<Block>;
+  openStrip: StripFlags;
+  inverseStrip: StripFlags;
+  closeStrip: StripFlags;
 
   // Glimmer extensions
   chained?: boolean;

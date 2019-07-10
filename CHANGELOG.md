@@ -1,5 +1,120 @@
 # Changelog
 
+## v0.41.2 (2019-07-04)
+
+#### :rocket: Enhancement
+* `@glimmer/syntax`
+  * [#951](https://github.com/glimmerjs/glimmer-vm/pull/951) Preserve mustache whitespace stripping information in AST and printer ([@CvX](https://github.com/CvX))
+
+#### Committers: 1
+- Jarek Radosz ([@CvX](https://github.com/CvX))
+
+
+## v0.41.1 (2019-06-25)
+
+#### :rocket: Enhancement
+* `@glimmer/reference`
+  * [#945](https://github.com/glimmerjs/glimmer-vm/pull/945) Performance improvements for keyed lists changes ([@lifeart](https://github.com/lifeart))
+
+#### :bug: Bug Fix
+* `@glimmer/syntax`
+  * [#949](https://github.com/glimmerjs/glimmer-vm/pull/949) Print unescaped statements correctly ([@paddyobrien](https://github.com/paddyobrien))
+
+#### Committers: 2
+- Alex Kanunnikov ([@lifeart](https://github.com/lifeart))
+- Paddy O'Brien ([@paddyobrien](https://github.com/paddyobrien))
+
+
+## v0.41.0 (2019-05-13)
+
+#### :boom: Breaking Change
+* `@glimmer/syntax`
+  * [#942](https://github.com/glimmerjs/glimmer-vm/pull/942) Add support for `chained` inverse blocks ([@Turbo87](https://github.com/Turbo87))
+
+#### :house: Internal
+* [#927](https://github.com/glimmerjs/glimmer-vm/pull/927) Update yarn-link-all script to print out commands to run in project ([@NullVoxPopuli](https://github.com/NullVoxPopuli))
+
+#### Committers: 2
+- L. Preston Sego III ([@NullVoxPopuli](https://github.com/NullVoxPopuli))
+- Tobias Bieniek ([@Turbo87](https://github.com/Turbo87))
+
+
+## v0.40.2 (2019-05-13)
+
+#### :bug: Bug Fix
+* `@glimmer/syntax`
+  * [#941](https://github.com/glimmerjs/glimmer-vm/pull/941) Fix printer support for self-closing angle bracket component invocations ([@Turbo87](https://github.com/Turbo87))
+  * [#932](https://github.com/glimmerjs/glimmer-vm/pull/932) Fix printing of MustacheStatement with literal path ([@ef4](https://github.com/ef4))
+
+#### :house: Internal
+* `@glimmer/runtime`
+  * [#943](https://github.com/glimmerjs/glimmer-vm/pull/943) Remove redundant "this" ([@2hu12](https://github.com/2hu12))
+
+#### Committers: 4
+- 2hu ([@2hu12](https://github.com/2hu12))
+- Edward Faulkner ([@ef4](https://github.com/ef4))
+- Robert Jackson ([@rwjblue](https://github.com/rwjblue))
+- Tobias Bieniek ([@Turbo87](https://github.com/Turbo87))
+
+
+## v0.40.1 (2019-04-16)
+
+#### :rocket: Enhancement
+* `@glimmer/integration-tests`, `@glimmer/interfaces`, `@glimmer/node`, `@glimmer/runtime`, `@glimmer/syntax`
+  * [#931](https://github.com/glimmerjs/glimmer-vm/pull/931) Modifying in-element semantics to support non-null insertBefore elements ([@chiragpat](https://github.com/chiragpat))
+
+#### Committers: 1
+- Chirag Patel ([@chiragpat](https://github.com/chiragpat))
+
+
+## v0.40.0 (2019-04-08)
+
+#### :boom: Breaking Change
+* `@glimmer/integration-tests`, `@glimmer/interfaces`, `@glimmer/node`, `@glimmer/opcode-compiler`, `@glimmer/runtime`, `@glimmer/syntax`
+  * [#918](https://github.com/glimmerjs/glimmer-vm/pull/918) [FEATURE | BREAKING] Change semantics of in-element to match emberjs/rfcs#287 ([@chadhietala](https://github.com/chadhietala))
+
+#### :rocket: Enhancement
+* `@glimmer/compiler`, `@glimmer/integration-tests`, `@glimmer/interfaces`, `@glimmer/runtime`, `@glimmer/wire-format`
+  * [#923](https://github.com/glimmerjs/glimmer-vm/pull/923) Allow forward element modifiers into component invocations via ...attributes ([@cibernox](https://github.com/cibernox))
+* `@glimmer/integration-tests`, `@glimmer/runtime`
+  * [#924](https://github.com/glimmerjs/glimmer-vm/pull/924) Add ability to pass in dynamic scope to render component apis ([@chiragpat](https://github.com/chiragpat))
+* `@glimmer/integration-tests`, `@glimmer/interfaces`, `@glimmer/node`, `@glimmer/opcode-compiler`, `@glimmer/runtime`, `@glimmer/syntax`
+  * [#918](https://github.com/glimmerjs/glimmer-vm/pull/918) [FEATURE | BREAKING] Change semantics of in-element to match emberjs/rfcs#287 ([@chadhietala](https://github.com/chadhietala))
+
+#### :bug: Bug Fix
+* `@glimmer/compiler`, `@glimmer/integration-tests`, `@glimmer/interfaces`, `@glimmer/node`, `@glimmer/opcode-compiler`, `@glimmer/runtime`, `@glimmer/wire-format`
+  * [#928](https://github.com/glimmerjs/glimmer-vm/pull/928) Fix modifiers order ([@chancancode](https://github.com/chancancode))
+* `@glimmer/compiler`, `@glimmer/integration-tests`
+  * [#869](https://github.com/glimmerjs/glimmer-vm/pull/869) Ensure passing attribute as mustache properly forwards the current namespace (e.g. svg) ([@mhankus](https://github.com/mhankus))
+
+#### Committers: 6
+- Chad Hietala ([@chadhietala](https://github.com/chadhietala))
+- Chirag Patel ([@chiragpat](https://github.com/chiragpat))
+- Edward Faulkner ([@ef4](https://github.com/ef4))
+- Godfrey Chan ([@chancancode](https://github.com/chancancode))
+- Miguel Camba ([@cibernox](https://github.com/cibernox))
+- Mirek Hankus ([@mhankus](https://github.com/mhankus))
+
+## v0.39.3 (2019-03-15)
+
+#### :bug: Bug Fix
+* `@glimmer/runtime`
+  * [#922](https://github.com/glimmerjs/glimmer-vm/pull/922) Use type generic for `scope()` function ([@pzuraq](https://github.com/pzuraq))
+* `@glimmer/interfaces`
+  * [#921](https://github.com/glimmerjs/glimmer-vm/pull/921) ComponentManager types - fix typeParam shadowing ([@mike-north](https://github.com/mike-north))
+* `@glimmer/syntax`
+  * [#919](https://github.com/glimmerjs/glimmer-vm/pull/919) fix: security audit handlebars update ([@knownasilya](https://github.com/knownasilya))
+
+#### :house: Internal
+* `@glimmer/bundle-compiler`
+  * [#917](https://github.com/glimmerjs/glimmer-vm/pull/917) Fixed typo on method name; compilerModuleLocatorResolver ([@wondersloth](https://github.com/wondersloth))
+
+#### Committers: 4
+- Chris Garrett ([@pzuraq](https://github.com/pzuraq))
+- Ilya Radchenko ([@knownasilya](https://github.com/knownasilya))
+- Matthew Edwards ([@wondersloth](https://github.com/wondersloth))
+- Mike North ([@mike-north](https://github.com/mike-north))
+
 ## 0.37.0 (2018-11-29)
 
 #### :bug: Bug Fix

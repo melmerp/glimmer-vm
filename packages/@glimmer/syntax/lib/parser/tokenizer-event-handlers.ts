@@ -12,6 +12,7 @@ import Walker from '../traversal/walker';
 import * as handlebars from 'handlebars';
 import { assign } from '@glimmer/util';
 import { NodeVisitor } from '../traversal/visitor';
+import { EntityParser } from 'simple-html-tokenizer';
 
 export const voidMap: {
   [tagName: string]: boolean;
@@ -335,15 +336,29 @@ export interface ASTPlugin {
 }
 
 export interface ASTPluginEnvironment {
-  meta?: any;
+  meta?: object;
   syntax: Syntax;
+}
+interface HandlebarsParseOptions {
+  srcName?: string;
+  ignoreStandalone?: boolean;
 }
 
 export interface PreprocessOptions {
+  meta?: unknown;
   plugins?: {
     ast?: ASTPluginBuilder[];
   };
-  parseOptions?: object;
+  parseOptions?: HandlebarsParseOptions;
+
+  /**
+    Useful for specifying a group of options together.
+
+    When `'codemod'` we disable all whitespace control in handlebars
+    (to preserve as much as possible) and we also avoid any
+    escaping/unescaping of HTML entity codes.
+   */
+  mode?: 'codemod' | 'precompile';
 }
 
 export interface Syntax {
@@ -362,10 +377,28 @@ const syntax: Syntax = {
   Walker,
 };
 
-export function preprocess(html: string, options?: PreprocessOptions): AST.Template {
-  const parseOptions = options ? options.parseOptions : {};
-  let ast = typeof html === 'object' ? html : (handlebars.parse(html, parseOptions) as HBS.Program);
-  let program = new TokenizerEventHandlers(html).acceptTemplate(ast);
+export function preprocess(html: string, options: PreprocessOptions = {}): AST.Template {
+  let mode = options.mode || 'precompile';
+
+  let ast: HBS.Program;
+  if (typeof html === 'object') {
+    ast = html;
+  } else {
+    let parseOptions = options.parseOptions || {};
+
+    if (mode === 'codemod') {
+      parseOptions.ignoreStandalone = true;
+    }
+
+    ast = handlebars.parse(html, parseOptions) as HBS.Program;
+  }
+
+  let entityParser = undefined;
+  if (mode === 'codemod') {
+    entityParser = new EntityParser({});
+  }
+
+  let program = new TokenizerEventHandlers(html, entityParser).acceptTemplate(ast);
 
   if (options && options.plugins && options.plugins.ast) {
     for (let i = 0, l = options.plugins.ast.length; i < l; i++) {

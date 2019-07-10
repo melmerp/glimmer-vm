@@ -35,7 +35,7 @@ export abstract class HandlebarsNodeVisitors extends Parser {
     if (this.isTopLevel) {
       node = b.template(body, program.blockParams, program.loc);
     } else {
-      node = b.blockItself(body, program.blockParams, program.loc);
+      node = b.blockItself(body, program.blockParams, program.chained, program.loc);
     }
 
     let i,
@@ -90,7 +90,17 @@ export abstract class HandlebarsNodeVisitors extends Parser {
       hash = addInElementHash(this.cursor(), hash, block.loc);
     }
 
-    let node = b.block(path, params, hash, program, inverse, block.loc);
+    let node = b.block(
+      path,
+      params,
+      hash,
+      program,
+      inverse,
+      block.loc,
+      block.openStrip,
+      block.inverseStrip,
+      block.closeStrip
+    );
 
     let parentProgram = this.currentElement();
 
@@ -106,7 +116,7 @@ export abstract class HandlebarsNodeVisitors extends Parser {
     }
 
     let mustache: AST.MustacheStatement;
-    let { escaped, loc } = rawMustache;
+    let { escaped, loc, strip } = rawMustache;
 
     if (isLiteral(rawMustache.path)) {
       mustache = {
@@ -116,12 +126,13 @@ export abstract class HandlebarsNodeVisitors extends Parser {
         hash: b.hash(),
         escaped,
         loc,
+        strip,
       };
     } else {
       let { path, params, hash } = acceptCallNodes(this, rawMustache as HBS.MustacheStatement & {
         path: HBS.PathExpression;
       });
-      mustache = b.mustache(path, params, hash, !escaped, loc);
+      mustache = b.mustache(path, params, hash, !escaped, loc, strip);
     }
 
     switch (tokenizer.state) {
@@ -441,14 +452,14 @@ function addElementModifier(element: Tag<'StartTag'>, mustache: AST.MustacheStat
 }
 
 function addInElementHash(cursor: string, hash: AST.Hash, loc: AST.SourceLocation) {
-  let hasNextSibling = false;
+  let hasInsertBefore = false;
   hash.pairs.forEach(pair => {
     if (pair.key === 'guid') {
       throw new SyntaxError('Cannot pass `guid` from user space', loc);
     }
 
-    if (pair.key === 'nextSibling') {
-      hasNextSibling = true;
+    if (pair.key === 'insertBefore') {
+      hasInsertBefore = true;
     }
   });
 
@@ -456,10 +467,10 @@ function addInElementHash(cursor: string, hash: AST.Hash, loc: AST.SourceLocatio
   let guidPair = b.pair('guid', guid);
   hash.pairs.unshift(guidPair);
 
-  if (!hasNextSibling) {
-    let nullLiteral = b.literal('NullLiteral', null);
-    let nextSibling = b.pair('nextSibling', nullLiteral);
-    hash.pairs.push(nextSibling);
+  if (!hasInsertBefore) {
+    let undefinedLiteral = b.literal('UndefinedLiteral', undefined);
+    let beforeSibling = b.pair('insertBefore', undefinedLiteral);
+    hash.pairs.push(beforeSibling);
   }
 
   return hash;

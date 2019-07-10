@@ -149,20 +149,20 @@ export default class BundleCompiler {
    * Adds the template source code for a component to the bundle.
    */
   addTemplateSource(_locator: ModuleLocator, templateSource: string): SerializedTemplateBlock {
-    let l = normalizeLocator(_locator);
+    let locator = normalizeLocator(_locator);
 
-    let block = this.preprocess(templateSource);
-    this.context.compiledBlocks.set(l, block);
+    let block = this.preprocess(locator, templateSource);
+    this.context.compiledBlocks.set(locator, block);
 
     let layout = {
       block,
-      referrer: l,
+      referrer: locator,
       asPartial: false,
     };
 
     let template = compilable(layout);
 
-    this.addCompilableTemplate(l, template);
+    this.addCompilableTemplate(locator, template);
 
     return block;
   }
@@ -197,18 +197,19 @@ export default class BundleCompiler {
       main: this.context.stdlib.main,
       heap: this.context.heap.capture(this.context.stdlib) as SerializedHeap,
       pool: this.context.constants.toPool(),
-      table: this.compilerModuleLocatoresolver().getTable(),
+      table: this.compilerModuleLocatorResolver().getTable(),
       symbolTables,
     };
   }
 
-  preprocess(input: string): SerializedTemplateBlock {
-    let ast = preprocess(input, { plugins: { ast: this.plugins } });
+  preprocess(locator: ModuleLocator, input: string): SerializedTemplateBlock {
+    let options = { meta: locator, plugins: { ast: this.plugins } };
+    let ast = preprocess(input, options);
     let template = TemplateCompiler.compile(ast);
     return template.toJSON();
   }
 
-  compilerModuleLocatoresolver(): BundleCompilerLookup<ModuleLocator> {
+  compilerModuleLocatorResolver(): BundleCompilerLookup<ModuleLocator> {
     return this.context.resolverDelegate;
   }
 
@@ -220,7 +221,7 @@ export default class BundleCompiler {
     // If this locator already has an assigned VM handle, it means we've already
     // compiled it. We need to skip compiling it again and just return the same
     // VM handle.
-    let vmHandle = this.compilerModuleLocatoresolver().getHandleByLocator(locator);
+    let vmHandle = this.compilerModuleLocatorResolver().getHandleByLocator(locator);
     if (vmHandle !== undefined) return vmHandle;
 
     // It's an error to try to compile a template that wasn't first added to the
@@ -237,7 +238,7 @@ export default class BundleCompiler {
     vmHandle = compilableTemplate.compile(syntaxCompilationContext(this.context, this.macros));
 
     // Index the locator by VM handle and vice versa for easy lookups.
-    this.compilerModuleLocatoresolver().setHandleByLocator(locator, vmHandle);
+    this.compilerModuleLocatorResolver().setHandleByLocator(locator, vmHandle);
 
     return vmHandle;
   }

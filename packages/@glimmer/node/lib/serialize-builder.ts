@@ -1,4 +1,11 @@
-import { Bounds, Environment, Option, ElementBuilder } from '@glimmer/interfaces';
+import {
+  Bounds,
+  Environment,
+  Option,
+  ElementBuilder,
+  ModifierManager,
+  Maybe,
+} from '@glimmer/interfaces';
 import { ConcreteBounds, NewElementBuilder } from '@glimmer/runtime';
 import { RemoteLiveBlock } from '@glimmer/runtime';
 import { SimpleElement, SimpleNode, SimpleText } from '@simple-dom/interface';
@@ -68,13 +75,13 @@ class SerializeBuilder extends NewElementBuilder implements ElementBuilder {
     return super.__appendText(string);
   }
 
-  closeElement() {
+  closeElement(): Option<[ModifierManager, unknown][]> {
     if (NEEDS_EXTRA_CLOSE.has(this.element)) {
       NEEDS_EXTRA_CLOSE.delete(this.element);
       super.closeElement();
     }
 
-    super.closeElement();
+    return super.closeElement();
   }
 
   openElement(tag: string) {
@@ -86,7 +93,7 @@ class SerializeBuilder extends NewElementBuilder implements ElementBuilder {
         // account for the insertion since it is injected here and not
         // really in the template.
         NEEDS_EXTRA_CLOSE.set(this.constructing!, true);
-        this.flushElement();
+        this.flushElement(null);
       }
     }
 
@@ -96,13 +103,13 @@ class SerializeBuilder extends NewElementBuilder implements ElementBuilder {
   pushRemoteElement(
     element: SimpleElement,
     cursorId: string,
-    nextSibling: Option<SimpleNode> = null
+    insertBefore: Maybe<SimpleNode> = null
   ): Option<RemoteLiveBlock> {
     let { dom } = this;
     let script = dom.createElement('script');
     script.setAttribute('glmr', cursorId);
-    dom.insertBefore(element, script, nextSibling);
-    return super.pushRemoteElement(element, cursorId, nextSibling);
+    dom.insertBefore(element, script, insertBefore);
+    return super.pushRemoteElement(element, cursorId, insertBefore);
   }
 }
 

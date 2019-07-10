@@ -6,12 +6,13 @@ import {
   SimpleDocumentFragment,
   AttrNamespace,
 } from '@simple-dom/interface';
-import { Option, DestroySymbol, SymbolDestroyable } from '../core';
+import { Option, DestroySymbol, SymbolDestroyable, Maybe } from '../core';
 import { Bounds, Cursor } from './bounds';
 import { ElementOperations, Environment } from '../runtime';
 import { GlimmerTreeConstruction, GlimmerTreeChanges } from './changes';
 import { Stack } from '../stack';
 import { LinkedList, LinkedListNode } from '../list';
+import { ModifierManager } from '@glimmer/interfaces';
 
 export interface LiveBlock extends Bounds {
   openElement(element: SimpleElement): void;
@@ -40,12 +41,12 @@ export interface DOMStack {
   pushRemoteElement(
     element: SimpleElement,
     guid: string,
-    nextSibling: Option<SimpleNode>
+    insertBefore: Maybe<SimpleNode>
   ): Option<RemoteLiveBlock>;
   popRemoteElement(): void;
   popElement(): void;
   openElement(tag: string, _operations?: ElementOperations): SimpleElement;
-  flushElement(): void;
+  flushElement(modifiers: Option<[ModifierManager, unknown][]>): void;
   appendText(string: string): SimpleText;
   appendComment(string: string): SimpleComment;
 
@@ -61,7 +62,8 @@ export interface DOMStack {
     isTrusting: boolean,
     namespace: Option<string>
   ): AttributeOperation;
-  closeElement(): void;
+
+  closeElement(): Option<[ModifierManager, unknown][]>;
 }
 
 export interface TreeOperations {
