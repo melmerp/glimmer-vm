@@ -240,6 +240,7 @@ export interface SerializedInlineBlock extends SerializedBlock {
 export interface SerializedTemplateBlock extends SerializedBlock {
   symbols: string[];
   hasEval: boolean;
+  upvars: string[];
 }
 
 /**

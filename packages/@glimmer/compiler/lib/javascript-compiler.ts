@@ -56,9 +56,10 @@ export class TemplateBlock extends Block {
   public yields = new DictSet<string>();
   public named = new DictSet<string>();
   public blocks: SerializedInlineBlock[] = [];
+  public upvars: string[] = [];
   public hasEval = false;
 
-  constructor(private symbolTable: AST.Symbols) {
+  constructor(private symbolTable: AST.Symbols, strict: boolean) {
     super();
   }
 
@@ -71,6 +72,7 @@ export class TemplateBlock extends Block {
       symbols: this.symbolTable.symbols,
       statements: this.statements,
       hasEval: this.hasEval,
+      upvars: this.upvars,
     };
   }
 }
@@ -143,8 +145,12 @@ export class ComponentBlock extends Block {
 export class Template {
   public block: TemplateBlock;
 
-  constructor(symbols: AST.Symbols) {
-    this.block = new TemplateBlock(symbols);
+  constructor(symbols: AST.Symbols, readonly strict: boolean) {
+    this.block = new TemplateBlock(symbols, strict);
+  }
+
+  get upvars(): string[] {
+    return this.block.upvars;
   }
 
   toJSON(): SerializedTemplateBlock {
@@ -166,16 +172,20 @@ export default class JavaScriptCompiler
     return compiler.process();
   }
 
-  private template: Template;
-  private blocks = new Stack<Block>();
-  private opcodes: InOp[];
-  private values: StackValue[] = [];
-  private options: CompileOptions | undefined;
+  private readonly template: Template;
+  private readonly blocks = new Stack<Block>();
+  private readonly opcodes: InOp[];
+  private readonly values: StackValue[] = [];
+  private readonly options: CompileOptions | undefined;
 
   constructor(opcodes: InOp[], symbols: AST.Symbols, options?: CompileOptions) {
     this.opcodes = opcodes;
-    this.template = new Template(symbols);
+    this.template = new Template(symbols, options ? !!options.strict : false);
     this.options = options;
+  }
+
+  get strict(): boolean {
+    return this.template.strict;
   }
 
   get currentBlock(): Block {
@@ -266,7 +276,7 @@ export default class JavaScriptCompiler
       namedBlocks = [['default', 'else'], [blocks[template], blocks[inverse]]];
     }
 
-    this.push([SexpOpcodes.Block, name, params, hash, namedBlocks]);
+    this.push([SexpOpcodes.Block, this.upvar(name), params, hash, namedBlocks]);
   }
 
   openComponent(element: AST.ElementNode) {
@@ -418,7 +428,7 @@ export default class JavaScriptCompiler
     let params = this.popValue<Params>();
     let hash = this.popValue<Hash>();
 
-    this.pushValue<Expressions.Helper>([SexpOpcodes.Helper, name, params, hash]);
+    this.pushValue<Expressions.Helper>([SexpOpcodes.Helper, this.upvar(name), params, hash]);
   }
 
   /// Stack Management Opcodes
@@ -451,6 +461,11 @@ export default class JavaScriptCompiler
   }
 
   /// Utilities
+
+  upvar(name: string): string {
+    this.template.upvars.push(name);
+    return name;
+  }
 
   endComponent(): [string, Statements.Attribute[], Core.Hash, Core.Blocks] {
     let component = this.blocks.pop();

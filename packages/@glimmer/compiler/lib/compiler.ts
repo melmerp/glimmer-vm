@@ -76,3 +76,23 @@ export function precompile(
   // JSON is javascript
   return JSON.stringify(templateJSONObject);
 }
+
+export function strictPrecompile(string: string, options?: PrecompileOptions): TemplateJavascript;
+export function strictPrecompile(
+  string: string,
+  options: PrecompileOptions = defaultOptions
+): TemplateJavascript {
+  let ast = preprocess(string, options);
+  let { meta } = options;
+  let { block } = TemplateCompiler.compile(ast, { ...options, strict: true });
+  let idFn = options.id || defaultId;
+  let blockJSON = JSON.stringify(block.toJSON());
+  let templateJSONObject: SerializedTemplateWithLazyBlock<unknown> = {
+    id: idFn(JSON.stringify(meta) + blockJSON),
+    block: blockJSON,
+    meta,
+  };
+
+  // JSON is javascript
+  return JSON.stringify(templateJSONObject);
+}

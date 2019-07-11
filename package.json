@@ -31,8 +31,9 @@
     "link:local": "node bin/yarn-link-local"
   },
   "resolutions": {
-    "typescript": "3.2.4",
-    "amd-name-resolver": "https://github.com/ember-cli/amd-name-resolver.git"
+    "typescript": "3.5.3",
+    "amd-name-resolver": "https://github.com/ember-cli/amd-name-resolver.git",
+    "broccoli-typescript-compiler": "http://github.com/wycats/broccoli-typescript-compiler.git#upgrade-typescript"
   },
   "dependencies": {
     "@simple-dom/document": "^1.4.0",
@@ -62,7 +63,7 @@
     "broccoli-persistent-filter": "^2.1.1",
     "broccoli-rollup": "^2.0.0",
     "broccoli-source": "^1.1.0",
-    "broccoli-typescript-compiler": "^4.1.0",
+    "broccoli-typescript-compiler": "http://github.com/wycats/broccoli-typescript-compiler.git#upgrade-typescript",
     "dag-map": "^2.0.2",
     "ember-cli": "~3.6.1",
     "ember-cli-release": "^1.0.0-beta.2",
@@ -96,5 +97,9 @@
       "documentation": ":memo: Documentation",
       "internal": ":house: Internal"
     }
+  },
+  "volta": {
+    "node": "10.16.0",
+    "yarn": "1.16.0"
   }
 }

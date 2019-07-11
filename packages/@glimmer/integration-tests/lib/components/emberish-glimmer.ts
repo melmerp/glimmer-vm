@@ -54,10 +54,10 @@ export class EmberishGlimmerComponent {
   public parentView: Option<EmberishGlimmerComponent> = null;
 
   static create({ attrs: args }: EmberishGlimmerArgs): EmberishGlimmerComponent {
-    let c: EmberishGlimmerComponent & Dict = new this({ attrs: args });
+    let c = new this({ attrs: args });
 
     for (let key of keys(args)) {
-      c[key] = args[key];
+      (c as any)[key] = args[key];
     }
 
     return c;
@@ -85,6 +85,7 @@ export class EmberishGlimmerComponent {
 export interface EmberishGlimmerComponentFactory
   extends TestComponentConstructor<EmberishGlimmerComponent> {
   create(options: { attrs: Attrs }): EmberishGlimmerComponent;
+  new (...args: unknown[]): this;
 }
 
 export const EMBERISH_GLIMMER_CAPABILITIES = assign({}, BASIC_CAPABILITIES, {
@@ -227,7 +228,7 @@ export function inspectHooks<
     constructor() {
       super();
 
-      this.hooks = {
+      (this as any).hooks = {
         didInitAttrs: 0,
         didUpdateAttrs: 0,
         didReceiveAttrs: 0,

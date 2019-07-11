@@ -21,7 +21,7 @@ export class SymbolAllocator
   implements Processor<CompilerOps<InVariable>, OutVariable, CompilerOps<OutVariable>> {
   private symbolStack = new Stack<AST.Symbols>();
 
-  constructor(private ops: Array<InOp>) {}
+  constructor(private ops: Array<InOp>, private strict: boolean) {}
 
   process(): OutOp[] {
     let out: OutOp[] = [];

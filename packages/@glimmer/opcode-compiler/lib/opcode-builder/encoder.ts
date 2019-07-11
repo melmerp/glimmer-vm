@@ -86,9 +86,9 @@ export function op<K extends AllOpcode>(
     }
 
     if (op1 === undefined) {
-      return { type, op: name, op1: undefined } as HighLevelOp;
+      return { type, op: name, op1: undefined } as any;
     } else {
-      return { type, op: name, op1 } as HighLevelOp;
+      return { type, op: name, op1 } as any;
     }
   }
 }

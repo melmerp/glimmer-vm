@@ -10,6 +10,7 @@ import { DEBUG } from '@glimmer/local-debug-flags';
 export interface CompileOptions {
   meta?: unknown;
   customizeComponentName?(tag: string): string;
+  strict?: true;
 }
 
 function isTrustedValue(value: any) {
@@ -23,9 +24,11 @@ export default class TemplateCompiler {
     let templateVisitor = new TemplateVisitor();
     templateVisitor.visit(ast);
 
-    let compiler = new TemplateCompiler();
-    let opcodes: SymbolInOp[] = compiler.process(templateVisitor.actions);
-    let symbols: SymbolOutOp[] = new SymbolAllocator(opcodes).process();
+    let strict = options ? !!options.strict : false;
+
+    let compiler = new TemplateCompiler(strict);
+    let { opcodes, upvars } = compiler.process(templateVisitor.actions);
+    let symbols: SymbolOutOp[] = new SymbolAllocator(opcodes, strict).process();
 
     let out = JavaScriptCompiler.process(symbols, ast.symbols!, options);
 
@@ -36,19 +39,27 @@ export default class TemplateCompiler {
     return out;
   }
 
+  constructor(private strict: boolean) {}
+
   private templateId = 0;
   private templateIds: number[] = [];
   private opcodes: SymbolInOp[] = [];
+  private upvars: Set<string> = new Set();
   private includeMeta = false;
 
-  process(actions: Action[]): SymbolInOp[] {
+  private upvar(name: string): string {
+    this.upvars.add(name);
+    return name;
+  }
+
+  process(actions: Action[]): { opcodes: SymbolInOp[]; upvars: Set<string> } {
     actions.forEach(([name, ...args]) => {
       if (!this[name]) {
         throw new Error(`Unimplemented ${name} on TemplateCompiler`);
       }
       (this[name] as any)(...args);
     });
-    return this.opcodes;
+    return { opcodes: this.opcodes, upvars: this.upvars };
   }
 
   startProgram([program]: [AST.Template]) {
@@ -192,27 +203,27 @@ export default class TemplateCompiler {
     } = action;
 
     this.prepareHelper(action);
-    this.opcode(['modifier', parts[0]], action);
+    this.opcode(['modifier', this.upvar(parts[0])], action);
   }
 
-  mustache([action]: [AST.MustacheStatement]) {
-    let { path } = action;
+  mustache([mustache]: [AST.MustacheStatement]) {
+    let { path } = mustache;
 
     if (isLiteral(path)) {
-      this.mustacheExpression(action);
-      this.opcode(['append', !action.escaped], action);
+      this.mustacheExpression(mustache);
+      this.opcode(['append', !mustache.escaped], mustache);
     } else if (isYield(path)) {
-      let to = assertValidYield(action);
-      this.yield(to, action);
+      let to = assertValidYield(mustache);
+      this.yield(to, mustache);
     } else if (isPartial(path)) {
-      let params = assertValidPartial(action);
-      this.partial(params, action);
+      let params = assertValidPartial(mustache);
+      this.partial(params, mustache);
     } else if (isDebugger(path)) {
-      assertValidDebuggerUsage(action);
-      this.debugger('debugger', action);
+      assertValidDebuggerUsage(mustache);
+      this.debugger('debugger', mustache);
     } else {
-      this.mustacheExpression(action);
-      this.opcode(['append', !action.escaped], action);
+      this.mustacheExpression(mustache);
+      this.opcode(['append', !mustache.escaped], mustache);
     }
   }
 
@@ -243,22 +254,15 @@ export default class TemplateCompiler {
       this.arg([path]);
     } else if (isHelperInvocation(expr)) {
       this.prepareHelper(expr);
-      this.opcode(['helper', path.parts[0]], expr);
+      this.opcode(['helper', this.upvar(path.parts[0])], expr);
     } else if (path.this) {
+      this.upvar('this');
       this.opcode(['get', [0, path.parts]], expr);
     } else {
       let [head, ...parts] = path.parts;
+      this.upvar(head);
       this.opcode(['maybeGet', [head, parts]], expr);
     }
-
-    // } else if (isLocal(path, this.symbols)) {
-    //   let [head, ...parts] = path.parts;
-    //   this.opcode(['get', [head, parts]], expr);
-    // } else if (isSimplePath(path)) {
-    //   this.opcode(['unknown', path.parts[0]], expr);
-    // } else {
-    //   this.opcode(['maybeLocal', path.parts], expr);
-    // }
   }
 
   /// Internal Syntax
@@ -303,7 +307,8 @@ export default class TemplateCompiler {
       this.builtInHelper(expr);
     } else {
       this.prepareHelper(expr);
-      this.opcode(['helper', expr.path.parts[0]], expr);
+      let head = expr.path.parts[0];
+      this.opcode(['helper', this.upvar(head), expr]);
     }
   }
 
@@ -314,8 +319,10 @@ export default class TemplateCompiler {
       let [head, ...rest] = expr.parts;
 
       if (expr.this) {
+        this.upvar('this');
         this.opcode(['get', [0, expr.parts]], expr);
       } else {
+        this.upvar(head);
         this.opcode(['get', [head, rest]], expr);
       }
     }
@@ -371,7 +378,7 @@ export default class TemplateCompiler {
       let param = params[i];
 
       assert(this[param.type], `Unimplemented ${param.type} on TemplateCompiler`);
-      (this[param.type] as any)(param);
+      this[param.type](param as any);
     }
 
     this.opcode(['prepareArray', params.length], null);
@@ -389,7 +396,7 @@ export default class TemplateCompiler {
       let { key, value } = pairs[i];
 
       assert(this[value.type], `Unimplemented ${value.type} on TemplateCompiler`);
-      (this[value.type] as any)(value);
+      this[value.type](value as any);
       this.opcode(['literal', key], null);
     }
 
