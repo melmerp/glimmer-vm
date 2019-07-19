@@ -19,35 +19,38 @@ export const enum SexpOpcodes {
   Append = 1,
   Comment = 2,
   Modifier = 3,
-  Block = 4,
-  Component = 5,
-  DynamicComponent = 6,
-  OpenElement = 7,
-  FlushElement = 9,
-  CloseElement = 10,
-  StaticAttr = 11,
-  DynamicAttr = 12,
-  ComponentAttr = 13,
-  AttrSplat = 14,
-  Yield = 15,
-  Partial = 16,
+  StrictModifier = 4,
+  Block = 5,
+  StrictBlock = 6,
+  Component = 7,
+  DynamicComponent = 8,
+  OpenElement = 9,
+  FlushElement = 10,
+  CloseElement = 11,
+  StaticAttr = 12,
+  DynamicAttr = 13,
+  ComponentAttr = 14,
+  AttrSplat = 15,
+  Yield = 16,
+  Partial = 17,
 
-  DynamicArg = 17,
-  StaticArg = 18,
-  TrustingDynamicAttr = 19,
-  TrustingComponentAttr = 20,
-  Debugger = 21,
+  DynamicArg = 18,
+  StaticArg = 19,
+  TrustingDynamicAttr = 20,
+  TrustingComponentAttr = 21,
+  Debugger = 22,
 
   // Expressions
 
   Unknown = 23,
   Get = 24,
-  MaybeLocal = 25,
-  HasBlock = 26,
-  HasBlockParams = 27,
-  Undefined = 28,
-  Helper = 29,
-  Concat = 30,
+  GetFree = 25,
+  MaybeLocal = 26,
+  HasBlock = 27,
+  HasBlockParams = 28,
+  Undefined = 29,
+  Helper = 30,
+  Concat = 32,
 }
 
 export interface SexpOpcodeMap {
@@ -106,6 +109,7 @@ export namespace Expressions {
 
   export type Unknown = [SexpOpcodes.Unknown, str];
   export type Get = [SexpOpcodes.Get, number, Path];
+  export type GetFree = [SexpOpcodes.GetFree, number, Path];
 
   /**
    * Ambiguous between a self lookup (when not inside an eval) and
@@ -121,6 +125,7 @@ export namespace Expressions {
   export type TupleExpression =
     | Unknown
     | Get
+    | GetFree
     | MaybeLocal
     | Concat
     | HasBlock
@@ -134,7 +139,7 @@ export namespace Expressions {
 
   export interface Concat extends Passthru<[SexpOpcodes.Concat, Params]> {}
 
-  export interface Helper extends Passthru<[SexpOpcodes.Helper, str, Params, Hash]> {}
+  export interface Helper extends Passthru<[SexpOpcodes.Helper, Expression, Params, Hash]> {}
 }
 
 export type Expression = Expressions.Expression;
@@ -151,8 +156,8 @@ export namespace Statements {
   export type Text = [SexpOpcodes.Text, str];
   export type Append = [SexpOpcodes.Append, Expression, boolean];
   export type Comment = [SexpOpcodes.Comment, str];
-  export type Modifier = [SexpOpcodes.Modifier, str, Params, Hash];
-  export type Block = [SexpOpcodes.Block, str, Params, Hash, Blocks];
+  export type Modifier = [SexpOpcodes.Modifier, Expression, Params, Hash];
+  export type Block = [SexpOpcodes.Block, Expression, Params, Hash, Blocks];
   export type Component = [SexpOpcodes.Component, str, Attribute[], Hash, Blocks];
   export type DynamicComponent = [
     SexpOpcodes.DynamicComponent,
@@ -218,6 +223,7 @@ export namespace Statements {
 /** A Handlebars statement */
 export type Statement = Statements.Statement;
 export type Attribute = Statements.Attribute;
+export type Argument = Statements.Argument;
 export type Parameter = Statements.Parameter;
 
 export type SexpSyntax = Statement | TupleExpression;
@@ -248,6 +254,7 @@ export interface SerializedTemplateBlock extends SerializedBlock {
  */
 export interface SerializedTemplate<T> {
   block: SerializedTemplateBlock;
+  id?: Option<string>;
   meta: T;
 }
 

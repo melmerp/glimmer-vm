@@ -3,7 +3,7 @@ import { Stack, DictSet, Option, expect } from '@glimmer/util';
 import { AST } from '@glimmer/syntax';
 import { CompileOptions } from './template-compiler';
 import { isArgument, isAttribute, isFlushElement } from '@glimmer/wire-format';
-import { Processor, CompilerOps, OpName, Op } from './compiler-ops';
+import { Processor, JavaScriptCompilerOps, Ops } from './compiler-ops';
 import {
   WireFormat,
   SerializedInlineBlock,
@@ -56,10 +56,9 @@ export class TemplateBlock extends Block {
   public yields = new DictSet<string>();
   public named = new DictSet<string>();
   public blocks: SerializedInlineBlock[] = [];
-  public upvars: string[] = [];
   public hasEval = false;
 
-  constructor(private symbolTable: AST.Symbols, strict: boolean) {
+  constructor(private symbolTable: AST.ProgramSymbols, strict: boolean) {
     super();
   }
 
@@ -72,7 +71,7 @@ export class TemplateBlock extends Block {
       symbols: this.symbolTable.symbols,
       statements: this.statements,
       hasEval: this.hasEval,
-      upvars: this.upvars,
+      upvars: this.symbolTable.freeVariables,
     };
   }
 }
@@ -145,12 +144,8 @@ export class ComponentBlock extends Block {
 export class Template {
   public block: TemplateBlock;
 
-  constructor(symbols: AST.Symbols, readonly strict: boolean) {
+  constructor(symbols: AST.ProgramSymbols, readonly strict: boolean) {
     this.block = new TemplateBlock(symbols, strict);
-  }
-
-  get upvars(): string[] {
-    return this.block.upvars;
   }
 
   toJSON(): SerializedTemplateBlock {
@@ -158,27 +153,21 @@ export class Template {
   }
 }
 
-export type InVariable = number;
-export type InOp<K extends keyof CompilerOps<InVariable> = OpName> = Op<
-  InVariable,
-  CompilerOps<InVariable>,
-  K
->;
+type Input = readonly Ops<JavaScriptCompilerOps>[];
 
-export default class JavaScriptCompiler
-  implements Processor<CompilerOps<number>, void, CompilerOps<void>> {
-  static process(opcodes: InOp[], symbols: AST.Symbols, options?: CompileOptions): Template {
+export default class JavaScriptCompiler implements Processor<JavaScriptCompilerOps> {
+  static process(opcodes: Input, symbols: AST.ProgramSymbols, options?: CompileOptions): Template {
     let compiler = new JavaScriptCompiler(opcodes, symbols, options);
     return compiler.process();
   }
 
   private readonly template: Template;
   private readonly blocks = new Stack<Block>();
-  private readonly opcodes: InOp[];
+  private readonly opcodes: readonly Ops<JavaScriptCompilerOps>[];
   private readonly values: StackValue[] = [];
   private readonly options: CompileOptions | undefined;
 
-  constructor(opcodes: InOp[], symbols: AST.Symbols, options?: CompileOptions) {
+  constructor(opcodes: Input, symbols: AST.ProgramSymbols, options?: CompileOptions) {
     this.opcodes = opcodes;
     this.template = new Template(symbols, options ? !!options.strict : false);
     this.options = options;
@@ -246,13 +235,14 @@ export default class JavaScriptCompiler
     this.push([SexpOpcodes.Comment, value]);
   }
 
-  modifier(name: string) {
+  modifier() {
     let params = this.popValue<Params>();
     let hash = this.popValue<Hash>();
     this.push([SexpOpcodes.Modifier, name, params, hash]);
   }
 
-  block([name, template, inverse]: [string, number, Option<number>]) {
+  block([template, inverse]: [number, Option<number>]) {
+    let head = this.popValue<Expression>();
     let params = this.popValue<Params>();
     let hash = this.popValue<Hash>();
 
@@ -276,7 +266,9 @@ export default class JavaScriptCompiler
       namedBlocks = [['default', 'else'], [blocks[template], blocks[inverse]]];
     }
 
-    this.push([SexpOpcodes.Block, this.upvar(name), params, hash, namedBlocks]);
+    // assert(head[]);
+
+    this.push([SexpOpcodes.Block, head, params, hash, namedBlocks]);
   }
 
   openComponent(element: AST.ElementNode) {
@@ -416,6 +408,10 @@ export default class JavaScriptCompiler
     this.pushValue<Expressions.Get>([SexpOpcodes.Get, head, path]);
   }
 
+  getFree([head, path]: [number, string[]]) {
+    this.pushValue<Expressions.GetFree>([SexpOpcodes.GetFree, head, path]);
+  }
+
   maybeLocal(path: string[]) {
     this.pushValue<Expressions.MaybeLocal>([SexpOpcodes.MaybeLocal, path]);
   }
@@ -424,11 +420,12 @@ export default class JavaScriptCompiler
     this.pushValue<Expressions.Concat>([SexpOpcodes.Concat, this.popValue<Params>()]);
   }
 
-  helper(name: string) {
+  helper() {
+    let head = this.popValue<Expression>();
     let params = this.popValue<Params>();
     let hash = this.popValue<Hash>();
 
-    this.pushValue<Expressions.Helper>([SexpOpcodes.Helper, this.upvar(name), params, hash]);
+    this.pushValue<Expressions.Helper>([SexpOpcodes.Helper, head, params, hash]);
   }
 
   /// Stack Management Opcodes
@@ -461,11 +458,6 @@ export default class JavaScriptCompiler
   }
 
   /// Utilities
-
-  upvar(name: string): string {
-    this.template.upvars.push(name);
-    return name;
-  }
 
   endComponent(): [string, Statements.Attribute[], Core.Hash, Core.Blocks] {
     let component = this.blocks.pop();

@@ -84,9 +84,7 @@ export function appendChild(
   childrenFor(parent).push(node);
 }
 
-export function isLiteral(
-  path: AST.PathExpression | HBS.PathExpression | AST.Literal | HBS.Literal
-): path is AST.Literal {
+export function isLiteral(path: AST.Expression): path is AST.Literal {
   return (
     path.type === 'StringLiteral' ||
     path.type === 'BooleanLiteral' ||

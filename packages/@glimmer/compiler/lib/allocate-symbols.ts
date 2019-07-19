@@ -1,4 +1,11 @@
-import { CompilerOps, Processor, Op, OpName, TemplateCompilerOps, PathHead } from './compiler-ops';
+import {
+  Processor,
+  Op,
+  AllocateSymbolsOps,
+  PathHead,
+  JavaScriptCompilerOps,
+  Ops,
+} from './compiler-ops';
 import { AST } from '@glimmer/syntax';
 import { Option } from '@glimmer/interfaces';
 import { Stack, expect } from '@glimmer/util';
@@ -6,46 +13,32 @@ import { Stack, expect } from '@glimmer/util';
 export type InVariable = PathHead;
 export type OutVariable = number;
 
-export type OutOp<K extends keyof CompilerOps<OutVariable> = OpName> = Op<
-  OutVariable,
-  CompilerOps<OutVariable>,
-  K
->;
-export type InOp<K extends keyof TemplateCompilerOps = keyof TemplateCompilerOps> = Op<
-  PathHead,
-  TemplateCompilerOps,
-  K
->;
+export type Out = Ops<JavaScriptCompilerOps>;
 
-export class SymbolAllocator
-  implements Processor<CompilerOps<InVariable>, OutVariable, CompilerOps<OutVariable>> {
+export class SymbolAllocator implements Processor<AllocateSymbolsOps> {
   private symbolStack = new Stack<AST.Symbols>();
 
-  constructor(private ops: Array<InOp>, private strict: boolean) {}
+  constructor(private ops: readonly Ops<AllocateSymbolsOps>[], private strict: boolean) {}
 
-  process(): OutOp[] {
-    let out: OutOp[] = [];
+  process(): readonly Ops<JavaScriptCompilerOps>[] {
+    let out = [];
     let { ops } = this;
 
     for (let i = 0; i < ops.length; i++) {
       let op = ops[i];
       let result = this.dispatch(op);
 
-      if (result === undefined) {
-        out.push(op as OutOp);
-      } else {
-        out.push(result as any);
-      }
+      out.push(result);
     }
 
     return out;
   }
 
-  dispatch<O extends InOp>(op: O): unknown {
+  dispatch<O extends Ops<AllocateSymbolsOps>>(op: O): Ops<JavaScriptCompilerOps> {
     let name = op[0];
     let operand = op[1];
 
-    return (this[name] as any)(operand);
+    return (this[name] as any)(operand) || ((op as unknown) as Ops<JavaScriptCompilerOps>);
   }
 
   get symbols(): AST.Symbols {
@@ -56,7 +49,7 @@ export class SymbolAllocator
     this.symbolStack.push(op.symbols!);
   }
 
-  endProgram(_op: null) {
+  endProgram() {
     this.symbolStack.pop();
   }
 
@@ -64,7 +57,7 @@ export class SymbolAllocator
     this.symbolStack.push(op.symbols!);
   }
 
-  endBlock(_op: null) {
+  endBlock() {
     this.symbolStack.pop();
   }
 
@@ -92,61 +85,41 @@ export class SymbolAllocator
     this.symbolStack.pop();
   }
 
-  attrSplat(_op: Option<InVariable>): OutOp<'attrSplat'> {
+  attrSplat(): Op<JavaScriptCompilerOps, 'attrSplat'> {
     return ['attrSplat', this.symbols.allocateBlock('attrs')];
   }
 
-  get(op: [InVariable, string[]]): OutOp<'get' | 'maybeLocal'> {
-    let [name, rest] = op;
+  getArg([arg, rest]: [string, string[]]): Op<JavaScriptCompilerOps, 'get'> {
+    let head = this.symbols.allocateNamed(`@${arg}`);
+    return ['get', [head, rest]];
+  }
 
-    if (name === 0) {
-      return ['get', [0, rest]];
-    }
+  getThis(rest: string[]): Op<JavaScriptCompilerOps, 'get'> {
+    if (rest === undefined) debugger;
+    return ['get', [0, rest]];
+  }
+
+  getVar(op: [string, string[]]): Op<JavaScriptCompilerOps, 'get' | 'getFree'> {
+    let [name, rest] = op;
 
     if (isLocal(name, this.symbols)) {
       let head = this.symbols.get(name);
       return ['get', [head, rest]];
-    } else if (name[0] === '@') {
-      let head = this.symbols.allocateNamed(name);
-      return ['get', [head, rest]];
     } else {
-      return ['maybeLocal', [name, ...rest]];
+      let head = this.symbols.allocateFree(name);
+      return ['getFree', [head, rest]];
     }
   }
 
-  maybeGet(op: [InVariable, string[]]): OutOp<'get' | 'unknown' | 'maybeLocal'> {
-    let [name, rest] = op;
-
-    if (name === 0) {
-      return ['get', [0, rest]];
-    }
-
-    if (isLocal(name, this.symbols)) {
-      let head = this.symbols.get(name);
-      return ['get', [head, rest]];
-    } else if (name[0] === '@') {
-      let head = this.symbols.allocateNamed(name);
-      return ['get', [head, rest]];
-    } else if (rest.length === 0) {
-      return ['unknown', name];
-    } else {
-      return ['maybeLocal', [name, ...rest]];
-    }
-  }
-
-  yield(op: InVariable): OutOp<'yield'> {
-    if (op === 0) {
-      throw new Error('Cannot yield to this');
-    }
-
+  yield(op: string): Op<JavaScriptCompilerOps, 'yield'> {
     return ['yield', this.symbols.allocateBlock(op)];
   }
 
-  debugger(_op: Option<InVariable[]>): OutOp<'debugger'> {
+  debugger(_op: Option<InVariable[]>): Op<JavaScriptCompilerOps, 'debugger'> {
     return ['debugger', this.symbols.getEvalInfo()];
   }
 
-  hasBlock(op: InVariable): OutOp<'hasBlock'> {
+  hasBlock(op: InVariable): Op<JavaScriptCompilerOps, 'hasBlock'> {
     if (op === 0) {
       throw new Error('Cannot hasBlock this');
     }
@@ -154,7 +127,7 @@ export class SymbolAllocator
     return ['hasBlock', this.symbols.allocateBlock(op)];
   }
 
-  hasBlockParams(op: InVariable): OutOp<'hasBlockParams'> {
+  hasBlockParams(op: InVariable): Op<JavaScriptCompilerOps, 'hasBlockParams'> {
     if (op === 0) {
       throw new Error('Cannot hasBlockParams this');
     }
@@ -162,31 +135,85 @@ export class SymbolAllocator
     return ['hasBlockParams', this.symbols.allocateBlock(op)];
   }
 
-  partial(_op: Option<InVariable[]>): OutOp<'partial'> {
+  partial(): Op<JavaScriptCompilerOps, 'partial'> {
     return ['partial', this.symbols.getEvalInfo()];
   }
 
-  text(_op: string) {}
-  comment(_op: string) {}
-  openComponent(_op: AST.ElementNode) {}
-  openElement(_op: [AST.ElementNode, boolean]) {}
-  staticArg(_op: string) {}
-  dynamicArg(_op: string) {}
-  staticAttr(_op: [string, Option<string>]) {}
-  trustingAttr(_op: [string, Option<string>]) {}
-  dynamicAttr(_op: [string, Option<string>]) {}
-  componentAttr(_op: [string, Option<string>]) {}
-  trustingComponentAttr(_op: [string, Option<string>]) {}
-  modifier(_op: string) {}
-  append(_op: boolean) {}
-  block(_op: [string, number, Option<number>]) {}
-  literal(_op: string | boolean | number | null | undefined) {}
-  helper(_op: string) {}
-  unknown(_op: string) {}
-  maybeLocal(_op: string[]) {}
-  prepareArray(_op: number) {}
-  prepareObject(_op: number) {}
-  concat(_op: null) {}
+  block([template, inverse]: [number, Option<number>]): Op<JavaScriptCompilerOps, 'block'> {
+    return ['block', [template, inverse]];
+  }
+
+  modifier(): Out {
+    return ['modifier'];
+  }
+
+  helper(): Op<JavaScriptCompilerOps, 'helper'> {
+    return ['helper'];
+  }
+
+  text(content: string): Out {
+    return ['text', content];
+  }
+
+  comment(comment: string): Out {
+    return ['comment', comment];
+  }
+
+  openComponent(element: AST.ElementNode): Out {
+    return ['openComponent', element];
+  }
+
+  openElement([element, simple]: [AST.ElementNode, boolean]): Out {
+    return ['openElement', [element, simple]];
+  }
+
+  staticArg(name: string) {
+    return ['staticArg', name];
+  }
+
+  dynamicArg(name: string) {
+    return ['dynamicArg', name];
+  }
+
+  staticAttr([name, ns]: [string, Option<string>]) {
+    return ['staticAttr', [name, ns]];
+  }
+
+  trustingAttr([name, ns]: [string, Option<string>]) {
+    return ['trustingAttr', [name, ns]];
+  }
+
+  dynamicAttr([name, ns]: [string, Option<string>]) {
+    return ['dynamicAttr', [name, ns]];
+  }
+
+  componentAttr([name, ns]: [string, Option<string>]) {
+    return ['componentAttr', [name, ns]];
+  }
+
+  trustingComponentAttr([name, ns]: [string, Option<string>]) {
+    return ['trustedComponentAttr', [name, ns]];
+  }
+
+  append(trusted: boolean) {
+    return ['append', trusted];
+  }
+
+  literal(value: string | boolean | number | null | undefined) {
+    return ['literal', value];
+  }
+
+  prepareArray(count: number) {
+    return ['prepareArray', count];
+  }
+
+  prepareObject(count: number) {
+    return ['prepareObject', count];
+  }
+
+  concat() {
+    return ['concat'];
+  }
 }
 
 function isLocal(name: string, symbols: AST.Symbols): boolean {

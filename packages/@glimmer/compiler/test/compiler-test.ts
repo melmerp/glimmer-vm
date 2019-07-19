@@ -1,606 +1,398 @@
-import { precompile } from '@glimmer/compiler';
+import { precompile, WireFormatBuilder, WireFormatDebugger } from '@glimmer/compiler';
 import {
-  SerializedTemplateBlock,
   SerializedTemplateWithLazyBlock,
   SerializedTemplate,
+  WireFormat,
 } from '@glimmer/interfaces';
-import { assign } from '@glimmer/util';
+import { assign, strip } from '@glimmer/util';
+import { Namespace } from '@simple-dom/interface';
+
+import Op = WireFormat.SexpOpcodes;
 
 QUnit.module('@glimmer/compiler - compiling source to wire format');
 
 function compile(content: string): SerializedTemplate<unknown> {
-  let parsed = (JSON.parse(precompile(content)) as unknown) as SerializedTemplateWithLazyBlock<
-    unknown
-  >;
+  let parsed = (JSON.parse(
+    precompile(content, { meta: null, strict: true })
+  ) as unknown) as SerializedTemplateWithLazyBlock<unknown>;
   let block = JSON.parse(parsed.block);
 
   return assign({}, parsed, { block });
 }
 
-QUnit.test('HTML text content', assert => {
-  let content = compile('content');
+function test(desc: string, template: string, expectedFn: (b: WireFormatBuilder) => void) {
+  QUnit.test(desc, assert => {
+    let actual = compile(template);
 
-  assert.deepEqual(content, {
-    meta: null,
-    block: {
-      symbols: [],
-      hasEval: false,
-      upvars: [],
-      statements: [],
+    let builder = new WireFormatBuilder();
+    expectedFn(builder);
+
+    let expected = builder.toTemplate({ meta: null, id: null });
+
+    let debugExpected = new WireFormatDebugger(expected.block).format();
+    let debugActual = new WireFormatDebugger(actual.block).format();
+
+    assert.deepEqual(debugActual, debugExpected);
+  });
+}
+
+test('HTML text content', 'content', b => b.text('content'));
+
+test('Text curlies', '<div>{{title}}<span>{{title}}</span></div>', b => {
+  b.element('div', {
+    body: b => {
+      b.append(b.getFree('title'));
+      b.element('span', { body: b => b.append(b.getFree('title')) });
     },
   });
 });
 
-// @test
-// 'HTML text content'() {
-//   this.render('content');
-//   this.assertHTML('content');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'HTML tags'() {
-//   this.render('<h1>hello!</h1><div>content</div>');
-//   this.assertHTML('<h1>hello!</h1><div>content</div>');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'HTML attributes'() {
-//   this.render("<div class='foo' id='bar'>content</div>");
-//   this.assertHTML("<div class='foo' id='bar'>content</div>");
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'HTML data attributes'() {
-//   this.render("<div data-some-data='foo'>content</div>");
-//   this.assertHTML("<div data-some-data='foo'>content</div>");
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'HTML checked attributes'() {
-//   this.render("<input checked='checked'>");
-//   this.assertHTML(`<input checked='checked'>`);
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'HTML selected options'() {
-//   this.render(strip`
-//     <select>
-//       <option>1</option>
-//       <option selected>2</option>
-//       <option>3</option>
-//     </select>
-//   `);
-//   this.assertHTML(strip`
-//     <select>
-//       <option>1</option>
-//       <option selected>2</option>
-//       <option>3</option>
-//     </select>
-//   `);
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'HTML multi-select options'() {
-//   this.render(strip`
-//     <select multiple>
-//       <option>1</option>
-//       <option selected>2</option>
-//       <option selected>3</option>
-//     </select>
-//   `);
-//   this.assertHTML(strip`
-//     <select multiple>
-//       <option>1</option>
-//       <option selected>2</option>
-//       <option selected>3</option>
-//     </select>
-//   `);
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Void Elements'() {
-//   let voidElements = 'area base br embed hr img input keygen link meta param source track wbr';
-//   voidElements.split(' ').forEach(tagName => this.shouldBeVoid(tagName));
-// }
-
-// @test
-// 'Nested HTML'() {
-//   this.render(
-//     "<div class='foo'><p><span id='bar' data-foo='bar'>hi!</span></p></div>&nbsp;More content"
-//   );
-//   this.assertHTML(
-//     "<div class='foo'><p><span id='bar' data-foo='bar'>hi!</span></p></div>&nbsp;More content"
-//   );
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Custom Elements'() {
-//   this.render('<use-the-platform></use-the-platform>');
-//   this.assertHTML('<use-the-platform></use-the-platform>');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Nested Custom Elements'() {
-//   this.render(
-//     "<use-the-platform><seriously-please data-foo='1'>Stuff <div>Here</div></seriously-please></use-the-platform>"
-//   );
-//   this.assertHTML(
-//     "<use-the-platform><seriously-please data-foo='1'>Stuff <div>Here</div></seriously-please></use-the-platform>"
-//   );
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Moar nested Custom Elements'() {
-//   this.render(
-//     "<use-the-platform><seriously-please data-foo='1'><wheres-the-platform>Here</wheres-the-platform></seriously-please></use-the-platform>"
-//   );
-//   this.assertHTML(
-//     "<use-the-platform><seriously-please data-foo='1'><wheres-the-platform>Here</wheres-the-platform></seriously-please></use-the-platform>"
-//   );
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Custom Elements with dynamic attributes'() {
-//   this.render(
-//     "<fake-thing><other-fake-thing data-src='extra-{{someDynamicBits}}-here' /></fake-thing>",
-//     { someDynamicBits: 'things' }
-//   );
-//   this.assertHTML("<fake-thing><other-fake-thing data-src='extra-things-here' /></fake-thing>");
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Custom Elements with dynamic content'() {
-//   this.render('<x-foo><x-bar>{{derp}}</x-bar></x-foo>', { derp: 'stuff' });
-//   this.assertHTML('<x-foo><x-bar>stuff</x-bar></x-foo>');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Dynamic content within single custom element'() {
-//   this.render('<x-foo>{{#if derp}}Content Here{{/if}}</x-foo>', { derp: 'stuff' });
-//   this.assertHTML('<x-foo>Content Here</x-foo>');
-//   this.assertStableRerender();
-
-//   this.rerender({ derp: false });
-//   this.assertHTML('<x-foo><!----></x-foo>');
-//   this.assertStableRerender();
-
-//   this.rerender({ derp: true });
-//   this.assertHTML('<x-foo>Content Here</x-foo>');
-//   this.assertStableRerender();
-
-//   this.rerender({ derp: 'stuff' });
-//   this.assertHTML('<x-foo>Content Here</x-foo>');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Supports quotes'() {
-//   this.render('<div>"This is a title," we\'re on a boat</div>');
-//   this.assertHTML('<div>"This is a title," we\'re on a boat</div>');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Supports backslashes'() {
-//   this.render('<div>This is a backslash: \\</div>');
-//   this.assertHTML('<div>This is a backslash: \\</div>');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Supports new lines'() {
-//   this.render('<div>common\n\nbro</div>');
-//   this.assertHTML('<div>common\n\nbro</div>');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'HTML tag with empty attribute'() {
-//   this.render("<div class=''>content</div>");
-//   this.assertHTML("<div class=''>content</div>");
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Attributes containing a helper are treated like a block'() {
-//   this.registerHelper('testing', params => {
-//     this.assert.deepEqual(params, [123]);
-//     return 'example.com';
-//   });
-
-//   this.render('<a href="http://{{testing 123}}/index.html">linky</a>');
-//   this.assertHTML('<a href="http://example.com/index.html">linky</a>');
-//   this.assertStableRerender();
-// }
-
-// @test
-// "HTML boolean attribute 'disabled'"() {
-//   this.render('<input disabled>');
-//   this.assertHTML('<input disabled>');
-
-//   // TODO: What is the point of this test? (Note that it wouldn't work with SimpleDOM)
-//   // assertNodeProperty(root.firstChild, 'input', 'disabled', true);
-
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Quoted attribute null values do not disable'() {
-//   this.render('<input disabled="{{isDisabled}}">', { isDisabled: null });
-//   this.assertHTML('<input>');
-//   this.assertStableRerender();
-
-//   // TODO: What is the point of this test? (Note that it wouldn't work with SimpleDOM)
-//   // assertNodeProperty(root.firstChild, 'input', 'disabled', false);
-
-//   this.rerender({ isDisabled: true });
-//   this.assertHTML('<input disabled>');
-//   this.assertStableNodes();
-
-//   // TODO: ??????????
-//   this.rerender({ isDisabled: false });
-//   this.assertHTML('<input disabled>');
-//   this.assertStableNodes();
-
-//   this.rerender({ isDisabled: null });
-//   this.assertHTML('<input>');
-//   this.assertStableNodes();
-// }
-
-// @test
-// 'Unquoted attribute null values do not disable'() {
-//   this.render('<input disabled={{isDisabled}}>', { isDisabled: null });
-//   this.assertHTML('<input>');
-//   this.assertStableRerender();
-
-//   // TODO: What is the point of this test? (Note that it wouldn't work with SimpleDOM)
-//   // assertNodeProperty(root.firstChild, 'input', 'disabled', false);
-
-//   this.rerender({ isDisabled: true });
-//   this.assertHTML('<input disabled>');
-//   this.assertStableRerender();
-
-//   this.rerender({ isDisabled: false });
-//   this.assertHTML('<input>');
-//   this.assertStableRerender();
-
-//   this.rerender({ isDisabled: null });
-//   this.assertHTML('<input>');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Quoted attribute string values'() {
-//   this.render("<img src='{{src}}'>", { src: 'image.png' });
-//   this.assertHTML("<img src='image.png'>");
-//   this.assertStableRerender();
-
-//   this.rerender({ src: 'newimage.png' });
-//   this.assertHTML("<img src='newimage.png'>");
-//   this.assertStableNodes();
-
-//   this.rerender({ src: '' });
-//   this.assertHTML("<img src=''>");
-//   this.assertStableNodes();
-
-//   this.rerender({ src: 'image.png' });
-//   this.assertHTML("<img src='image.png'>");
-//   this.assertStableNodes();
-// }
-
-// @test
-// 'Unquoted attribute string values'() {
-//   this.render('<img src={{src}}>', { src: 'image.png' });
-//   this.assertHTML("<img src='image.png'>");
-//   this.assertStableRerender();
-
-//   this.rerender({ src: 'newimage.png' });
-//   this.assertHTML("<img src='newimage.png'>");
-//   this.assertStableNodes();
-
-//   this.rerender({ src: '' });
-//   this.assertHTML("<img src=''>");
-//   this.assertStableNodes();
-
-//   this.rerender({ src: 'image.png' });
-//   this.assertHTML("<img src='image.png'>");
-//   this.assertStableNodes();
-// }
-
-// @test
-// 'Unquoted img src attribute is not rendered when set to `null`'() {
-//   this.render("<img src='{{src}}'>", { src: null });
-//   this.assertHTML('<img>');
-//   this.assertStableRerender();
-
-//   this.rerender({ src: 'newimage.png' });
-//   this.assertHTML("<img src='newimage.png'>");
-//   this.assertStableNodes();
-
-//   this.rerender({ src: '' });
-//   this.assertHTML("<img src=''>");
-//   this.assertStableNodes();
-
-//   this.rerender({ src: null });
-//   this.assertHTML('<img>');
-//   this.assertStableNodes();
-// }
-
-// @test
-// 'Unquoted img src attribute is not rendered when set to `undefined`'() {
-//   this.render("<img src='{{src}}'>", { src: undefined });
-//   this.assertHTML('<img>');
-//   this.assertStableRerender();
-
-//   this.rerender({ src: 'newimage.png' });
-//   this.assertHTML("<img src='newimage.png'>");
-//   this.assertStableNodes();
-
-//   this.rerender({ src: '' });
-//   this.assertHTML("<img src=''>");
-//   this.assertStableNodes();
-
-//   this.rerender({ src: undefined });
-//   this.assertHTML('<img>');
-//   this.assertStableNodes();
-// }
-
-// @test
-// 'Unquoted a href attribute is not rendered when set to `null`'() {
-//   this.render('<a href={{href}}></a>', { href: null });
-//   this.assertHTML('<a></a>');
-//   this.assertStableRerender();
-
-//   this.rerender({ href: 'http://example.com' });
-//   this.assertHTML("<a href='http://example.com'></a>");
-//   this.assertStableNodes();
-
-//   this.rerender({ href: '' });
-//   this.assertHTML("<a href=''></a>");
-//   this.assertStableNodes();
-
-//   this.rerender({ href: null });
-//   this.assertHTML('<a></a>');
-//   this.assertStableNodes();
-// }
-
-// @test
-// 'Unquoted a href attribute is not rendered when set to `undefined`'() {
-//   this.render('<a href={{href}}></a>', { href: undefined });
-//   this.assertHTML('<a></a>');
-//   this.assertStableRerender();
-
-//   this.rerender({ href: 'http://example.com' });
-//   this.assertHTML("<a href='http://example.com'></a>");
-//   this.assertStableNodes();
-
-//   this.rerender({ href: '' });
-//   this.assertHTML("<a href=''></a>");
-//   this.assertStableNodes();
-
-//   this.rerender({ href: undefined });
-//   this.assertHTML('<a></a>');
-//   this.assertStableNodes();
-// }
-
-// @test
-// 'Attribute expression can be followed by another attribute'() {
-//   this.render("<div foo='{{funstuff}}' name='Alice'></div>", { funstuff: 'oh my' });
-//   this.assertHTML("<div name='Alice' foo='oh my'></div>");
-//   this.assertStableRerender();
-
-//   this.rerender({ funstuff: 'oh boy' });
-//   this.assertHTML("<div name='Alice' foo='oh boy'></div>");
-//   this.assertStableNodes();
-
-//   this.rerender({ funstuff: '' });
-//   this.assertHTML("<div name='Alice' foo=''></div>");
-//   this.assertStableNodes();
-
-//   this.rerender({ funstuff: 'oh my' });
-//   this.assertHTML("<div name='Alice' foo='oh my'></div>");
-//   this.assertStableNodes();
-// }
-
-// @test
-// 'Dynamic selected options'() {
-//   this.render(
-//     strip`
-//     <select>
-//       <option>1</option>
-//       <option selected={{selected}}>2</option>
-//       <option>3</option>
-//     </select>
-//   `,
-//     { selected: true }
-//   );
-
-//   this.assertHTML(strip`
-//     <select>
-//       <option>1</option>
-//       <option ${this.name === 'rehydration' ? ' selected=true' : ''}>2</option>
-//       <option>3</option>
-//     </select>
-//   `);
-
-//   let selectNode = unwrap(firstElementChild(this.element)) as HTMLSelectElement;
-//   this.assert.equal(selectNode.selectedIndex, 1);
-//   this.assertStableRerender();
-
-//   this.rerender({ selected: false });
-//   this.assertHTML(strip`
-//     <select>
-//       <option>1</option>
-//       <option ${this.name === 'rehydration' ? ' selected=true' : ''}>2</option>
-//       <option>3</option>
-//     </select>
-//   `);
-
-//   selectNode = unwrap(firstElementChild(this.element)) as HTMLSelectElement;
-
-//   this.assert.equal(selectNode.selectedIndex, 0);
-
-//   this.assertStableNodes();
-
-//   this.rerender({ selected: '' });
-
-//   this.assertHTML(strip`
-//     <select>
-//       <option>1</option>
-//       <option ${this.name === 'rehydration' ? ' selected=true' : ''}>2</option>
-//       <option>3</option>
-//     </select>
-//   `);
-
-//   selectNode = unwrap(firstElementChild(this.element)) as HTMLSelectElement;
-
-//   this.assert.equal(selectNode.selectedIndex, 0);
-
-//   this.assertStableNodes();
-
-//   this.rerender({ selected: true });
-//   this.assertHTML(strip`
-//     <select>
-//       <option>1</option>
-//       <option ${this.name === 'rehydration' ? ' selected=true' : ''}>2</option>
-//       <option>3</option>
-//     </select>
-//   `);
-
-//   selectNode = unwrap(firstElementChild(this.element)) as HTMLSelectElement;
-//   this.assert.equal(selectNode.selectedIndex, 1);
-//   this.assertStableNodes();
-// }
-
-// @test
-// 'Dynamic multi-select'() {
-//   this.render(
-//     strip`
-//     <select multiple>
-//       <option>0</option>
-//       <option selected={{somethingTrue}}>1</option>
-//       <option selected={{somethingTruthy}}>2</option>
-//       <option selected={{somethingUndefined}}>3</option>
-//       <option selected={{somethingNull}}>4</option>
-//       <option selected={{somethingFalse}}>5</option>
-//     </select>`,
-//     {
-//       somethingTrue: true,
-//       somethingTruthy: 'is-true',
-//       somethingUndefined: undefined,
-//       somethingNull: null,
-//       somethingFalse: false,
-//     }
-//   );
-
-//   let selectNode = firstElementChild(this.element);
-//   this.assert.ok(selectNode, 'rendered select');
-//   if (selectNode === null) {
-//     return;
-//   }
-//   let options = getElementsByTagName(selectNode, 'option');
-//   let selected: SimpleElement[] = [];
-//   for (let i = 0; i < options.length; i++) {
-//     let option = options[i];
-//     // TODO: This is a real discrepancy with SimpleDOM
-//     if ((option as any).selected) {
-//       selected.push(option);
-//     }
-//   }
-
-//   this.assertHTML(strip`
-//     <select multiple="">
-//       <option>0</option>
-//       <option ${this.name === 'rehydration' ? ' selected=true' : ''}>1</option>
-//       <option ${this.name === 'rehydration' ? ' selected=true' : ''}>2</option>
-//       <option>3</option>
-//       <option>4</option>
-//       <option>5</option>
-//     </select>`);
-
-//   this.assert.equal(selected.length, 2, 'two options are selected');
-//   this.assert.equal((selected[0] as HTMLOptionElement).value, '1', 'first selected item is "1"');
-//   this.assert.equal((selected[1] as HTMLOptionElement).value, '2', 'second selected item is "2"');
-// }
-
-// @test
-// 'HTML comments'() {
-//   this.render('<div><!-- Just passing through --></div>');
-//   this.assertHTML('<div><!-- Just passing through --></div>');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Curlies in HTML comments'() {
-//   this.render('<div><!-- {{foo}} --></div>', { foo: 'foo' });
-//   this.assertHTML('<div><!-- {{foo}} --></div>');
-//   this.assertStableRerender();
-
-//   this.rerender({ foo: 'bar' });
-//   this.assertHTML('<div><!-- {{foo}} --></div>');
-//   this.assertStableNodes();
-
-//   this.rerender({ foo: '' });
-//   this.assertHTML('<div><!-- {{foo}} --></div>');
-//   this.assertStableNodes();
-
-//   this.rerender({ foo: 'foo' });
-//   this.assertHTML('<div><!-- {{foo}} --></div>');
-//   this.assertStableNodes();
-// }
-
-// @test
-// 'Complex Curlies in HTML comments'() {
-//   this.render('<div><!-- {{foo bar baz}} --></div>', { foo: 'foo' });
-//   this.assertHTML('<div><!-- {{foo bar baz}} --></div>');
-//   this.assertStableRerender();
-
-//   this.rerender({ foo: 'bar' });
-//   this.assertHTML('<div><!-- {{foo bar baz}} --></div>');
-//   this.assertStableNodes();
-
-//   this.rerender({ foo: '' });
-//   this.assertHTML('<div><!-- {{foo bar baz}} --></div>');
-//   this.assertStableNodes();
-
-//   this.rerender({ foo: 'foo' });
-//   this.assertHTML('<div><!-- {{foo bar baz}} --></div>');
-//   this.assertStableNodes();
-// }
-
-// @test
-// 'HTML comments with multi-line mustaches'() {
-//   this.render('<div><!-- {{#each foo as |bar|}}\n{{bar}}\n\n{{/each}} --></div>');
-//   this.assertHTML('<div><!-- {{#each foo as |bar|}}\n{{bar}}\n\n{{/each}} --></div>');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Top level comments'() {
-//   this.render('<!-- {{foo}} -->');
-//   this.assertHTML('<!-- {{foo}} -->');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Handlebars comments'() {
-//   this.render('<div>{{! Better not break! }}content</div>');
-//   this.assertHTML('<div>content</div>');
-//   this.assertStableRerender();
-// }
+test(
+  'Smoke test (integration, basic)',
+  '<div ...attributes><@foo @staticNamedArg="static" data-test1={{@outerArg}} data-test2="static" @dynamicNamedArg={{@outerArg}} /></div>',
+  b => {
+    b.element('div', {
+      attrs: b => b.attrSplat(),
+      body: b => {
+        b.dynamicComponent(b.getArg('@foo'), {
+          params: b => {
+            b.arg('@staticNamedArg', 'static');
+            b.attr('data-test1', b.getArg('@outerArg'));
+            b.attr('data-test2', 'static');
+            b.arg('@dynamicNamedArg', b.getArg('@outerArg'));
+          },
+        });
+      },
+    });
+  }
+);
+
+test('elements', '<h1>hello!</h1><div>content</div>', b => {
+  b.element('h1', { body: b => b.text('hello!') });
+  b.element('div', { body: b => b.text('content') });
+});
+
+test('attributes', "<div class='foo' id='bar'>content</div>", b => {
+  b.element('div', {
+    attrs: b => b.attr('class', 'foo').attr('id', 'bar'),
+    body: b => b.text('content'),
+  });
+});
+
+test('data attributes', "<div data-some-data='foo'>content</div>", b => {
+  b.element('div', {
+    attrs: b => b.attr('data-some-data', 'foo'),
+    body: b => b.text('content'),
+  });
+});
+
+test('checked attributes', "<input checked='checked'>", b => {
+  b.element('input', {
+    attrs: b => b.attr('checked', 'checked'),
+  });
+});
+
+test(
+  'selected options',
+  strip`
+     <select>
+       <option>1</option>
+       <option selected>2</option>
+       <option>3</option>
+     </select>`,
+  b => {
+    b.element('select', {
+      body: b =>
+        b
+          .text('\n  ')
+          .element('option', {
+            body: b => b.text('1'),
+          })
+          .text('\n  ')
+          .element('option', {
+            attrs: b => b.attr('selected', ''),
+            body: b => b.text('2'),
+          })
+          .text('\n  ')
+          .element('option', { body: b => b.text('3') })
+          .text('\n'),
+    });
+  }
+);
+
+test(
+  'multi-select options',
+  strip`
+     <select multiple>
+       <option>1</option>
+       <option selected>2</option>
+       <option selected>3</option>
+     </select>`,
+  b => {
+    b.element('select', {
+      attrs: b => b.attr('multiple', ''),
+      body: b =>
+        b
+          .text('\n  ')
+          .element('option', {
+            body: b => b.text('1'),
+          })
+          .text('\n  ')
+          .element('option', {
+            attrs: b => b.attr('selected', ''),
+            body: b => b.text('2'),
+          })
+          .text('\n  ')
+          .element('option', {
+            attrs: b => b.attr('selected', ''),
+            body: b => b.text('3'),
+          })
+          .text('\n'),
+    });
+  }
+);
+
+let voidElements = 'area base br embed hr img input keygen link meta param source track wbr';
+voidElements.split(' ').forEach(tagName => {
+  test(`void ${tagName}`, `<${tagName}>`, b => b.element(tagName));
+});
+
+test(
+  'nested HTML',
+  "<div class='foo'><p><span id='bar' data-foo='bar'>hi!</span></p></div>&nbsp;More content",
+  b => {
+    b.element('div', {
+      attrs: b => b.attr('class', 'foo'),
+      body: b =>
+        b.element('p', b =>
+          b.element('span', {
+            attrs: b => b.attr('id', 'bar').attr('data-foo', 'bar'),
+            body: b => b.text('hi!'),
+          })
+        ),
+    }).text('\u00a0More content');
+  }
+);
+
+test('custom elements', '<use-the-platform></use-the-platform>', b =>
+  b.element('use-the-platform')
+);
+
+test(
+  'nested custom elements',
+  "<use-the-platform><seriously-please data-foo='1'>Stuff <div>Here</div></seriously-please></use-the-platform>",
+  b =>
+    b.element('use-the-platform', b =>
+      b.element('seriously-please', {
+        attrs: b => b.attr('data-foo', '1'),
+        body: b => b.text('Stuff ').element('div', b => b.text('Here')),
+      })
+    )
+);
+
+test(
+  'moar nested Custom Elements',
+  "<use-the-platform><seriously-please data-foo='1'><wheres-the-platform>Here</wheres-the-platform></seriously-please></use-the-platform>",
+  b =>
+    b.element('use-the-platform', b =>
+      b.element('seriously-please', {
+        attrs: b => b.attr('data-foo', '1'),
+        body: b => b.element('wheres-the-platform', { body: b => b.text('Here') }),
+      })
+    )
+);
+
+test(
+  'Custom Elements with dynamic attributes',
+  "<fake-thing><other-fake-thing data-src='extra-{{someDynamicBits}}-here' /></fake-thing>",
+  b => {
+    b.element('fake-thing', b =>
+      b.element('other-fake-thing', {
+        attrs: b => b.attr('data-src', b.concat('extra-', b.getFree('someDynamicBits'), '-here')),
+      })
+    );
+  }
+);
+
+test('Custom Elements with dynamic content', '<x-foo><x-bar>{{derp}}</x-bar></x-foo>', b => {
+  b.element('x-foo', b => b.element('x-bar', b => b.append(b.getFree('derp'))));
+});
+
+test('helpers', '<div>{{testing title}}</div>', b => {
+  b.element('div', b => b.append(b.helper('testing', [b.getFree('title')])));
+});
+
+test(
+  'Dynamic content within single custom element',
+  '<x-foo>{{#if derp}}Content Here{{/if}}</x-foo>',
+  b => {
+    b.element('x-foo', b =>
+      b.block('if', {
+        params: [b.getFree('derp')],
+        blocks: { default: b => b.text('Content Here') },
+      })
+    );
+  }
+);
+
+test(
+  'Dynamic content within single custom element',
+  '<x-foo>{{#if derp}}Content Here{{/if}}</x-foo>',
+  b =>
+    b.element('x-foo', b =>
+      b.block('if', {
+        params: [b.getFree('derp')],
+        blocks: {
+          default: b => b.text('Content Here'),
+        },
+      })
+    )
+);
+
+test('quotes in HTML', `<div>"This is a title," we're on a boat</div>`, b => {
+  b.element('div', b => b.text(`"This is a title," we're on a boat`));
+});
+
+test('backslashes in HTML', `<div>This is a backslash: \\</div>`, b => {
+  b.element('div', b => b.text(`This is a backslash: \\`));
+});
+
+test('newlines in HTML', `<div>common\n\nbro</div>`, b => {
+  b.element('div', b => b.text(`common\n\nbro`));
+});
+
+test('empty attributes', `<div class=''>content</div>`, b => {
+  b.element('div', { attrs: b => b.attr('class', ''), body: b => b.text(`content`) });
+});
+
+test('helpers in string attributes', `<a href="http://{{testing 123}}/index.html">linky</a>`, b => {
+  b.element('a', {
+    attrs: b => b.attr('href', b.concat('http://', b.helper('testing', [123]), '/index.html')),
+    body: b => b.text('linky'),
+  });
+});
+
+test(`boolean attribute 'disabled'`, '<input disabled>', b =>
+  b.element('input', {
+    attrs: b => b.attr('disabled', ''),
+  })
+);
+
+test(`string quoted attributes`, `<input disabled="{{isDisabled}}">`, b => {
+  b.element('input', { attrs: b => b.attr('disabled', b.concat(b.getFree('isDisabled'))) });
+});
+
+test(`unquoted attributes`, `<img src={{src}}>`, b =>
+  b.element('img', { attrs: b => b.attr('src', b.getFree('src')) })
+);
+
+test(`dynamic attr followed by static attr`, `<div foo='{{funstuff}}' name='Alice'></div>`, b =>
+  b.element('div', {
+    attrs: b => b.attr('foo', b.concat(b.getFree('funstuff'))).attr('name', 'Alice'),
+  })
+);
+
+test(
+  `dynamic selected options`,
+  strip`
+    <select>
+      <option>1</option>
+      <option selected={{selected}}>2</option>
+      <option>3</option>
+    </select>`,
+  b =>
+    b.element('select', b =>
+      b
+        .text('\n  ')
+        .element('option', b => b.text('1'))
+        .text('\n  ')
+        .element('option', {
+          attrs: b => b.attr('selected', b.getFree('selected')),
+          body: b => b.text('2'),
+        })
+        .text('\n  ')
+        .element('option', b => b.text('3'))
+        .text('\n')
+    )
+);
+
+test(
+  `dynamic multi-select`,
+  strip`
+      <select multiple>
+        <option>0</option>
+        <option selected={{somethingTrue}}>1</option>
+        <option selected={{somethingTruthy}}>2</option>
+        <option selected={{somethingUndefined}}>3</option>
+        <option selected={{somethingNull}}>4</option>
+        <option selected={{somethingFalse}}>5</option>
+      </select>`,
+  b =>
+    b.element('select', {
+      attrs: b => b.attr('multiple', ''),
+      body: b =>
+        b
+          .text('\n  ')
+          .element('option', b => b.text('0'))
+          .text('\n  ')
+          .element('option', {
+            attrs: b => b.attr('selected', b.getFree('somethingTrue')),
+            body: b => b.text('1'),
+          })
+          .text('\n  ')
+          .element('option', {
+            attrs: b => b.attr('selected', b.getFree('somethingTruthy')),
+            body: b => b.text('2'),
+          })
+          .text('\n  ')
+          .element('option', {
+            attrs: b => b.attr('selected', b.getFree('somethingUndefined')),
+            body: b => b.text('3'),
+          })
+          .text('\n  ')
+          .element('option', {
+            attrs: b => b.attr('selected', b.getFree('somethingNull')),
+            body: b => b.text('4'),
+          })
+          .text('\n  ')
+          .element('option', {
+            attrs: b => b.attr('selected', b.getFree('somethingFalse')),
+            body: b => b.text('5'),
+          })
+          .text('\n'),
+    })
+);
+
+test('HTML comments', `<div><!-- Just passing through --></div>`, b =>
+  b.element('div', b => b.comment(' Just passing through '))
+);
+
+test('curlies in HTML comments', `<div><!-- {{foo}} --></div>`, b =>
+  b.element('div', b => b.comment(' {{foo}} '))
+);
+
+test('complex curlies in HTML comments', `<div><!-- {{foo bar baz}} --></div>`, b =>
+  b.element('div', b => b.comment(' {{foo bar baz}} '))
+);
+
+test(
+  'handlebars blocks in HTML comments',
+  `<div><!-- {{#each foo as |bar|}}\n{{bar}}\n\n{{/each}} --></div>`,
+  b => b.element('div', b => b.comment(` {{#each foo as |bar|}}\n{{bar}}\n\n{{/each}} `))
+);
+
+test('top-level comments', `<!-- {{foo}} -->`, b => b.comment(` {{foo}} `));
+
+test('handlebars comments', `<div>{{! Better not break! }}content</div>`, b =>
+  b.element('div', b => b.text(`content`))
+);
+
+test('namespaced attribute', `<svg xlink:title='svg-title'>content</svg>`, b =>
+  b.element('svg', {
+    attrs: b => b.attr('xlink:title', 'svg-title', Namespace.XLink),
+    body: b => b.text('content'),
+  })
+);
 
 // @test
 // 'Namespaced attribute'() {
