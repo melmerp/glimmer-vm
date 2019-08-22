@@ -58,7 +58,7 @@ export class TemplateBlock extends Block {
   public blocks: SerializedInlineBlock[] = [];
   public hasEval = false;
 
-  constructor(private symbolTable: AST.ProgramSymbols, strict: boolean) {
+  constructor(private symbolTable: AST.ProgramSymbols) {
     super();
   }
 
@@ -144,8 +144,8 @@ export class ComponentBlock extends Block {
 export class Template {
   public block: TemplateBlock;
 
-  constructor(symbols: AST.ProgramSymbols, readonly strict: boolean) {
-    this.block = new TemplateBlock(symbols, strict);
+  constructor(symbols: AST.ProgramSymbols) {
+    this.block = new TemplateBlock(symbols);
   }
 
   toJSON(): SerializedTemplateBlock {
@@ -169,12 +169,8 @@ export default class JavaScriptCompiler implements Processor<JavaScriptCompilerO
 
   constructor(opcodes: Input, symbols: AST.ProgramSymbols, options?: CompileOptions) {
     this.opcodes = opcodes;
-    this.template = new Template(symbols, options ? !!options.strict : false);
+    this.template = new Template(symbols);
     this.options = options;
-  }
-
-  get strict(): boolean {
-    return this.template.strict;
   }
 
   get currentBlock(): Block {
@@ -224,7 +220,7 @@ export default class JavaScriptCompiler implements Processor<JavaScriptCompilerO
   /// Statements
 
   text(content: string) {
-    this.push([SexpOpcodes.Text, content]);
+    this.push([SexpOpcodes.Append, content, true]);
   }
 
   append(trusted: boolean) {
@@ -400,20 +396,17 @@ export default class JavaScriptCompiler implements Processor<JavaScriptCompilerO
     }
   }
 
-  unknown(name: string) {
-    this.pushValue<Expressions.Unknown>([SexpOpcodes.Unknown, name]);
+  getPath(rest: string[]) {
+    let head = this.popValue<Expressions.Get>();
+    this.pushValue<Expressions.GetPath>([SexpOpcodes.GetPath, head, rest]);
   }
 
-  get([head, path]: [number, string[]]) {
-    this.pushValue<Expressions.Get>([SexpOpcodes.Get, head, path]);
+  getSymbol(head: number) {
+    this.pushValue<Expressions.GetSymbol>([SexpOpcodes.GetSymbol, head]);
   }
 
-  getFree([head, path]: [number, string[]]) {
-    this.pushValue<Expressions.GetFree>([SexpOpcodes.GetFree, head, path]);
-  }
-
-  maybeLocal(path: string[]) {
-    this.pushValue<Expressions.MaybeLocal>([SexpOpcodes.MaybeLocal, path]);
+  getFree(head: number) {
+    this.pushValue<Expressions.GetFree>([SexpOpcodes.GetFree, head]);
   }
 
   concat() {
@@ -425,7 +418,7 @@ export default class JavaScriptCompiler implements Processor<JavaScriptCompilerO
     let params = this.popValue<Params>();
     let hash = this.popValue<Hash>();
 
-    this.pushValue<Expressions.Helper>([SexpOpcodes.Helper, head, params, hash]);
+    this.pushValue<Expressions.Helper>([SexpOpcodes.Call, head, params, hash]);
   }
 
   /// Stack Management Opcodes

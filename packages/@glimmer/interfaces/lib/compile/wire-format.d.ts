@@ -15,7 +15,6 @@ export type YieldTo = number;
 
 export const enum SexpOpcodes {
   // Statements
-  Text = 0,
   Append = 1,
   Comment = 2,
   Modifier = 3,
@@ -43,20 +42,20 @@ export const enum SexpOpcodes {
   // Expressions
 
   Unknown = 23,
-  Get = 24,
+  GetSymbol = 24,
   GetFree = 25,
-  MaybeLocal = 26,
-  HasBlock = 27,
-  HasBlockParams = 28,
-  Undefined = 29,
-  Helper = 30,
+  GetPath = 26,
+  MaybeLocal = 27,
+  HasBlock = 28,
+  HasBlockParams = 29,
+  Undefined = 30,
+  Call = 31,
   Concat = 32,
 }
 
 export interface SexpOpcodeMap {
   [index: number]: TupleSyntax;
 
-  [SexpOpcodes.Text]: Statements.Text;
   [SexpOpcodes.Append]: Statements.Append;
   [SexpOpcodes.Comment]: Statements.Comment;
   [SexpOpcodes.Modifier]: Statements.Modifier;
@@ -81,13 +80,11 @@ export interface SexpOpcodeMap {
 
   // Expressions
 
-  [SexpOpcodes.Unknown]: Expressions.Unknown;
-  [SexpOpcodes.Get]: Expressions.Get;
-  [SexpOpcodes.MaybeLocal]: Expressions.MaybeLocal;
+  [SexpOpcodes.GetSymbol]: Expressions.GetSymbol;
   [SexpOpcodes.HasBlock]: Expressions.HasBlock;
   [SexpOpcodes.HasBlockParams]: Expressions.HasBlockParams;
   [SexpOpcodes.Undefined]: Expressions.Undefined;
-  [SexpOpcodes.Helper]: Expressions.Helper;
+  [SexpOpcodes.Call]: Expressions.Helper;
   [SexpOpcodes.Concat]: Expressions.Concat;
 }
 
@@ -108,25 +105,17 @@ export namespace Expressions {
   export type Hash = Core.Hash;
 
   export type Unknown = [SexpOpcodes.Unknown, str];
-  export type Get = [SexpOpcodes.Get, number, Path];
-  export type GetFree = [SexpOpcodes.GetFree, number, Path];
-
-  /**
-   * Ambiguous between a self lookup (when not inside an eval) and
-   * a local variable (when used inside of an eval).
-   */
-  export type MaybeLocal = [SexpOpcodes.MaybeLocal, Path];
+  export type GetSymbol = [SexpOpcodes.GetSymbol, number];
+  export type GetFree = [SexpOpcodes.GetFree, number];
+  export type GetPath = [SexpOpcodes.GetPath, Get, Path];
 
   export type Value = str | number | boolean | null;
-  export type HasBlock = [SexpOpcodes.HasBlock, YieldTo];
-  export type HasBlockParams = [SexpOpcodes.HasBlockParams, YieldTo];
   export type Undefined = [SexpOpcodes.Undefined];
 
   export type TupleExpression =
-    | Unknown
-    | Get
+    | GetSymbol
     | GetFree
-    | MaybeLocal
+    | GetPath
     | Concat
     | HasBlock
     | HasBlockParams
@@ -134,15 +123,18 @@ export namespace Expressions {
     | Undefined;
 
   export type Expression = TupleExpression | Value;
+  export type Get = GetSymbol | GetFree;
 
-  type Passthru<T> = T;
+  type Recursive<T> = T;
 
-  export interface Concat extends Passthru<[SexpOpcodes.Concat, Params]> {}
-
-  export interface Helper extends Passthru<[SexpOpcodes.Helper, Expression, Params, Hash]> {}
+  export interface Concat extends Recursive<[SexpOpcodes.Concat, Params]> {}
+  export interface Helper extends Recursive<[SexpOpcodes.Call, Expression, Params, Hash]> {}
+  export interface HasBlock extends Recursive<[SexpOpcodes.HasBlock, Expression]> {}
+  export interface HasBlockParams extends Recursive<[SexpOpcodes.HasBlockParams, Expression]> {}
 }
 
 export type Expression = Expressions.Expression;
+export type Get = Expressions.GetSymbol | Expressions.GetFree;
 
 export type TupleExpression = Expressions.TupleExpression;
 
@@ -153,7 +145,6 @@ export namespace Statements {
   export type Blocks = Core.Blocks;
   export type Path = Core.Path;
 
-  export type Text = [SexpOpcodes.Text, str];
   export type Append = [SexpOpcodes.Append, Expression, boolean];
   export type Comment = [SexpOpcodes.Comment, str];
   export type Modifier = [SexpOpcodes.Modifier, Expression, Params, Hash];

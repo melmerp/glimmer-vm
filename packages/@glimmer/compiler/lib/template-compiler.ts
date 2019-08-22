@@ -6,12 +6,10 @@ import { getAttrNamespace } from './utils';
 import { SymbolAllocator } from './allocate-symbols';
 import { PathHead, Processor, InputOps, AllocateSymbolsOps, Ops } from './compiler-ops';
 import { DEBUG } from '@glimmer/local-debug-flags';
-import { privateDecrypt } from 'crypto';
 
 export interface CompileOptions {
   meta?: unknown;
   customizeComponentName?(tag: string): string;
-  strict?: true;
 }
 
 function isTrustedValue(value: any) {
@@ -25,11 +23,9 @@ export default class TemplateCompiler implements Processor<InputOps> {
     let templateVisitor = new TemplateVisitor();
     templateVisitor.visit(ast);
 
-    let strict = options ? !!options.strict : false;
-
-    let compiler = new TemplateCompiler(strict);
+    let compiler = new TemplateCompiler();
     let { opcodes } = compiler.process(templateVisitor.actions);
-    let symbols = new SymbolAllocator(opcodes, strict).process();
+    let symbols = new SymbolAllocator(opcodes).process();
 
     let out = JavaScriptCompiler.process(symbols, ast.symbols!, options);
 
@@ -40,7 +36,7 @@ export default class TemplateCompiler implements Processor<InputOps> {
     return out;
   }
 
-  constructor(private strict: boolean) {}
+  constructor() {}
 
   private templateId = 0;
   private templateIds: number[] = [];
@@ -104,13 +100,9 @@ export default class TemplateCompiler implements Processor<InputOps> {
     if (isDynamicComponent(action)) {
       let head: PathHead, rest: string[];
       [head, ...rest] = action.tag.split('.');
-      if (head === 'this') {
-        this.opcode(['getThis', rest]);
-      } else if (head[0] === '@') {
-        this.opcode(['getArg', [head.slice(1), rest]], action);
-      } else {
-        this.opcode(['getVar', [head, rest]], action);
-      }
+
+      this.path(head, rest, action);
+
       this.opcode(['openComponent', action], action);
       actionIsComponent = true;
     } else if (isNamedBlock(action)) {
@@ -245,11 +237,30 @@ export default class TemplateCompiler implements Processor<InputOps> {
 
   /// Internal actions, not found in the original processed actions
 
-  arg([path]: [AST.PathExpression]) {
-    let {
-      parts: [head, ...rest],
-    } = path;
-    this.opcode(['getArg', [head, rest]], path);
+  private path(head: string, rest: string[], loc: AST.BaseNode) {
+    this.debugger;
+    if (head === 'this') {
+      this.thisPath(rest, loc);
+    } else if (head[0] === '@') {
+      this.argPath(head, rest, loc);
+    } else {
+      this.varPath(head, rest, loc);
+    }
+  }
+
+  private argPath(head: string, rest: string[], loc: AST.BaseNode) {
+    this.opcode(['getArg', head.slice(1)], loc);
+    this.opcode(['getPath', rest], loc);
+  }
+
+  private varPath(head: string, rest: string[], loc: AST.BaseNode) {
+    this.opcode(['getVar', head], loc);
+    this.opcode(['getPath', rest], loc);
+  }
+
+  private thisPath(rest: string[], loc: AST.BaseNode) {
+    this.opcode(['getThis'], loc);
+    this.opcode(['getPath', rest], loc);
   }
 
   pathExpression(path: AST.Expression, expr: AST.Node) {
@@ -259,14 +270,20 @@ export default class TemplateCompiler implements Processor<InputOps> {
       throw new SyntaxError(`Expected PathExpression, got ${path.type}`, path.loc);
     } else if (isBuiltInHelper(expr)) {
       this.builtInHelper(expr as AST.Call);
-    } else if (isArg(path)) {
-      this.arg([path]);
     } else if (path.this) {
-      this.opcode(['getThis', path.parts], expr);
+      throw new Error(`Unexpected path.this in ${JSON.stringify(path)} in ${JSON.stringify(expr)}`);
     } else {
-      let [head, ...parts] = path.parts;
-      this.opcode(['getVar', [head, parts]], expr);
+      let [head, ...rest] = path.parts;
+      this.path(head, rest, expr);
     }
+    // } else if (isArg(path)) {
+    //   this.argPath([path]);
+    // } else if (path.this) {
+    //   this.opcode(['getThis', path.parts], expr);
+    // } else {
+    //   let [head, ...parts] = path.parts;
+    //   this.opcode(['getVar', [head, parts]], expr);
+    // }
   }
 
   /// Internal Syntax
@@ -318,17 +335,8 @@ export default class TemplateCompiler implements Processor<InputOps> {
   }
 
   PathExpression(expr: AST.PathExpression) {
-    if (expr.data) {
-      this.arg([expr]);
-    } else {
-      let [head, ...rest] = expr.parts;
-
-      if (expr.this) {
-        this.opcode(['getThis', expr.parts], expr);
-      } else {
-        this.opcode(['getVar', [head, rest]], expr);
-      }
-    }
+    let [head, ...rest] = expr.parts;
+    this.path(head, rest, expr);
   }
 
   StringLiteral(action: AST.StringLiteral) {
@@ -511,10 +519,6 @@ function isBuiltInHelper(node: AST.Node | AST.Call): node is AST.Call {
   } else {
     return false;
   }
-}
-
-function isArg(path: AST.PathExpression): boolean {
-  return !!path['data'];
 }
 
 function isDynamicComponent(element: AST.ElementNode): boolean {

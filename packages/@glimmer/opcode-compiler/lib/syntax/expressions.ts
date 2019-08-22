@@ -34,7 +34,7 @@ EXPRESSIONS.add(SexpOpcodes.Concat, ([, parts]) => {
   return out;
 });
 
-EXPRESSIONS.add(SexpOpcodes.Helper, ([, name, params, hash], meta) => {
+EXPRESSIONS.add(SexpOpcodes.Call, ([, name, params, hash], meta) => {
   // TODO: triage this in the WF compiler
   if (name === 'component') {
     assert(params.length, 'SYNTAX ERROR: component helper requires at least one argument');
@@ -58,7 +58,7 @@ EXPRESSIONS.add(SexpOpcodes.Helper, ([, name, params, hash], meta) => {
   });
 });
 
-EXPRESSIONS.add(SexpOpcodes.Get, ([, head, path]) => [
+EXPRESSIONS.add(SexpOpcodes.GetSymbol, ([, head, path]) => [
   op(Op.GetVariable, head),
   ...path.map(p => op(Op.GetProperty, p)),
 ]);

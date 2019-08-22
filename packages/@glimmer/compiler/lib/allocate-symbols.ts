@@ -18,7 +18,7 @@ export type Out = Ops<JavaScriptCompilerOps>;
 export class SymbolAllocator implements Processor<AllocateSymbolsOps> {
   private symbolStack = new Stack<AST.Symbols>();
 
-  constructor(private ops: readonly Ops<AllocateSymbolsOps>[], private strict: boolean) {}
+  constructor(private ops: readonly Ops<AllocateSymbolsOps>[]) {}
 
   process(): readonly Ops<JavaScriptCompilerOps>[] {
     let out = [];
@@ -89,26 +89,32 @@ export class SymbolAllocator implements Processor<AllocateSymbolsOps> {
     return ['attrSplat', this.symbols.allocateBlock('attrs')];
   }
 
-  getArg([arg, rest]: [string, string[]]): Op<JavaScriptCompilerOps, 'get'> {
-    let head = this.symbols.allocateNamed(`@${arg}`);
-    return ['get', [head, rest]];
+  getFree(name: string): Op<JavaScriptCompilerOps, 'getFree'> {
+    let symbol = this.symbols.allocateFree(name);
+    return ['getFree', symbol];
   }
 
-  getThis(rest: string[]): Op<JavaScriptCompilerOps, 'get'> {
-    if (rest === undefined) debugger;
-    return ['get', [0, rest]];
+  getArg(name: string): Op<JavaScriptCompilerOps, 'getSymbol'> {
+    let symbol = this.symbols.allocateNamed(name);
+    return ['getSymbol', symbol];
   }
 
-  getVar(op: [string, string[]]): Op<JavaScriptCompilerOps, 'get' | 'getFree'> {
-    let [name, rest] = op;
+  getThis(): Op<JavaScriptCompilerOps, 'getSymbol'> {
+    return ['getSymbol', 0];
+  }
 
-    if (isLocal(name, this.symbols)) {
-      let head = this.symbols.get(name);
-      return ['get', [head, rest]];
+  getVar(name: string): Op<JavaScriptCompilerOps, 'getSymbol' | 'getFree'> {
+    if (this.symbols.has(name)) {
+      let symbol = this.symbols.allocate(name);
+      return ['getSymbol', symbol];
     } else {
-      let head = this.symbols.allocateFree(name);
-      return ['getFree', [head, rest]];
+      let symbol = this.symbols.allocateFree(name);
+      return ['getFree', symbol];
     }
+  }
+
+  getPath(rest: string[]): Op<JavaScriptCompilerOps, 'getPath'> {
+    return ['getPath', rest];
   }
 
   yield(op: string): Op<JavaScriptCompilerOps, 'yield'> {
@@ -214,8 +220,4 @@ export class SymbolAllocator implements Processor<AllocateSymbolsOps> {
   concat() {
     return ['concat'];
   }
-}
-
-function isLocal(name: string, symbols: AST.Symbols): boolean {
-  return symbols && symbols.has(name);
 }

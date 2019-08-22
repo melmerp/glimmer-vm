@@ -16,7 +16,6 @@ import { $sp } from '@glimmer/vm';
 
 export const STATEMENTS = new StatementCompilers();
 
-STATEMENTS.add(SexpOpcodes.Text, sexp => op(Op.Text, sexp[1]));
 STATEMENTS.add(SexpOpcodes.Comment, sexp => op(Op.Comment, sexp[1]));
 STATEMENTS.add(SexpOpcodes.CloseElement, () => op(Op.CloseElement));
 STATEMENTS.add(SexpOpcodes.FlushElement, () => op(Op.FlushElement));

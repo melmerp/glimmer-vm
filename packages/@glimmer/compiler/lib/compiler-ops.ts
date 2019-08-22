@@ -53,9 +53,12 @@ export interface AllocateSymbolsOps {
   trustingAttr: [string, Option<string>];
   attrSplat: void;
 
-  getVar: [string, string[]]; // {{path}}, might be helper
-  getArg: [string, string[]];
-  getThis: string[];
+  getVar: string;
+  getArg: string;
+  getFree: string;
+  getThis: void;
+
+  getPath: string[];
 
   modifier: void;
   helper: void;
@@ -90,8 +93,9 @@ export interface JavaScriptCompilerOps {
   modifier: void;
   block: [number, Option<number>];
   attrSplat: Option<number>;
-  get: [number, string[]]; // path
-  getFree: [number, string[]];
+  getPath: string[];
+  getSymbol: number;
+  getFree: number;
   yield: number;
 
   hasBlock: number;

@@ -3,13 +3,12 @@ import {
   SexpOpcodes as Op,
   Option,
   SerializedInlineBlock,
-  SerializedTemplate,
   SerializedTemplateBlock,
 } from '@glimmer/interfaces';
 import { dict } from '@glimmer/util';
 
 export default class WireFormatDebugger {
-  constructor(private program: SerializedTemplateBlock, private parameters?: number[]) {}
+  constructor(private program: SerializedTemplateBlock, _parameters?: number[]) {}
 
   format(): unknown {
     let out = [];
@@ -79,9 +78,6 @@ export default class WireFormatDebugger {
         case Op.Debugger:
           return ['debugger', opcode[1]];
 
-        case Op.Text:
-          return ['text', opcode[1]];
-
         case Op.Comment:
           return ['comment', opcode[1]];
 
@@ -111,17 +107,14 @@ export default class WireFormatDebugger {
             this.formatBlocks(opcode[4]),
           ];
 
-        case Op.Unknown:
-          return ['unknown', opcode[1]];
-
-        case Op.Get:
-          return ['get', opcode[1], opcode[2]];
+        case Op.GetSymbol:
+          return ['get-symbol', opcode[1]];
 
         case Op.GetFree:
-          return ['get-free', opcode[1], opcode[2]];
+          return ['get-free', opcode[1]];
 
-        case Op.MaybeLocal:
-          return ['maybe-local', opcode[1]];
+        case Op.GetPath:
+          return ['get-path', this.formatOpcode(opcode[1]), opcode[2]];
 
         case Op.HasBlock:
           return ['has-block', opcode[1]];
@@ -132,7 +125,7 @@ export default class WireFormatDebugger {
         case Op.Undefined:
           return ['undefined'];
 
-        case Op.Helper:
+        case Op.Call:
           return [
             'helper',
             this.formatOpcode(opcode[1]),
