@@ -41,11 +41,10 @@ export const enum SexpOpcodes {
 
   // Expressions
 
-  Unknown = 23,
   GetSymbol = 24,
   GetFree = 25,
-  GetPath = 26,
-  MaybeLocal = 27,
+  GetContextualFree = 26,
+  GetPath = 27,
   HasBlock = 28,
   HasBlockParams = 29,
   Undefined = 30,
@@ -81,6 +80,9 @@ export interface SexpOpcodeMap {
   // Expressions
 
   [SexpOpcodes.GetSymbol]: Expressions.GetSymbol;
+  [SexpOpcodes.GetFree]: Expressions.GetFree;
+  [SexpOpcodes.GetContextualFree]: Expressions.GetContextualFree;
+  [SexpOpcodes.GetPath]: Expressions.GetPath;
   [SexpOpcodes.HasBlock]: Expressions.HasBlock;
   [SexpOpcodes.HasBlockParams]: Expressions.HasBlockParams;
   [SexpOpcodes.Undefined]: Expressions.Undefined;
@@ -100,14 +102,22 @@ export namespace Core {
   export type EvalInfo = number[];
 }
 
+export const enum ExpressionContext {
+  None = 'None',
+  CallHead = 'CallHead',
+  BlockHead = 'BlockHead',
+  ModifierHead = 'ModifierHead',
+  ComponentHead = 'ComponentHead',
+}
+
 export namespace Expressions {
   export type Path = Core.Path;
   export type Params = Core.Params;
   export type Hash = Core.Hash;
 
-  export type Unknown = [SexpOpcodes.Unknown, str];
   export type GetSymbol = [SexpOpcodes.GetSymbol, number];
   export type GetFree = [SexpOpcodes.GetFree, number];
+  export type GetContextualFree = [SexpOpcodes.GetContextualFree, number, ExpressionContext];
   export type GetPath = [SexpOpcodes.GetPath, Get, Path];
 
   export type Value = str | number | boolean | null;
@@ -116,6 +126,7 @@ export namespace Expressions {
   export type TupleExpression =
     | GetSymbol
     | GetFree
+    | GetContextualFree
     | GetPath
     | Concat
     | HasBlock
@@ -124,7 +135,7 @@ export namespace Expressions {
     | Undefined;
 
   export type Expression = TupleExpression | Value;
-  export type Get = GetSymbol | GetFree;
+  export type Get = GetSymbol | GetFree | GetContextualFree;
 
   type Recursive<T> = T;
 
@@ -135,7 +146,7 @@ export namespace Expressions {
 }
 
 export type Expression = Expressions.Expression;
-export type Get = Expressions.GetSymbol | Expressions.GetFree;
+export type Get = Expressions.Get;
 
 export type TupleExpression = Expressions.TupleExpression;
 
@@ -177,7 +188,6 @@ export namespace Statements {
    * A Handlebars statement
    */
   export type Statement =
-    | Text
     | Append
     | Comment
     | Modifier

@@ -31,4 +31,3 @@ export function isHelper(expr: Expression): expr is Expressions.Helper {
 
 // Expressions
 export const isGet = is<Expressions.GetSymbol>(SexpOpcodes.GetSymbol);
-export const isMaybeLocal = is<Expressions.MaybeLocal>(SexpOpcodes.MaybeLocal);

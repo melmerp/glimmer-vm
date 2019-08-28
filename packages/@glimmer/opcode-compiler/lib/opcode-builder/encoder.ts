@@ -227,7 +227,13 @@ function isCompileOpcode(op: AllOpcode): op is HighLevelCompileOpcode {
 }
 
 function isResolutionOpcode(op: AllOpcode): op is HighLevelResolutionOpcode {
-  return op === 'IfResolved' || op === 'Expr' || op === 'SimpleArgs';
+  return (
+    op === 'IfResolved' ||
+    op === 'Expr' ||
+    op === 'SimpleArgs' ||
+    op === 'ResolveFree' ||
+    op === 'ResolveContextualFree'
+  );
 }
 
 function sizeImmediate(

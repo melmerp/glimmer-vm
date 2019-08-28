@@ -77,6 +77,7 @@ export interface NamedBlocks {
 export interface ContainingMetadata {
   asPartial: boolean;
   evalSymbols: Option<string[]>;
+  upvars: Option<string[]>;
   referrer: unknown;
   size: number;
 }

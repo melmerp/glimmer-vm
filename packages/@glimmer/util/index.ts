@@ -24,7 +24,7 @@ export * from './lib/string';
 
 export type FIXME<T, S extends string> = T & S | T;
 
-export function assertNever(value: never): void {
+export function assertNever(value: never, desc = 'unexpected unreachable branch'): void {
   console.log('unreachable', value);
-  console.trace(`unexpected unreachable branch for ${JSON.stringify(value)} (${value})`);
+  console.trace(`${desc} :: ${JSON.stringify(value)} (${value})`);
 }

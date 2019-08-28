@@ -7,7 +7,7 @@ import {
   Ops,
 } from './compiler-ops';
 import { AST } from '@glimmer/syntax';
-import { Option } from '@glimmer/interfaces';
+import { Option, ExpressionContext } from '@glimmer/interfaces';
 import { Stack, expect } from '@glimmer/util';
 
 export type InVariable = PathHead;
@@ -103,13 +103,16 @@ export class SymbolAllocator implements Processor<AllocateSymbolsOps> {
     return ['getSymbol', 0];
   }
 
-  getVar(name: string): Op<JavaScriptCompilerOps, 'getSymbol' | 'getFree'> {
+  getVar([name, context]: [string, ExpressionContext]): Op<
+    JavaScriptCompilerOps,
+    'getSymbol' | 'getFree' | 'getFreeWithContext'
+  > {
     if (this.symbols.has(name)) {
       let symbol = this.symbols.get(name);
       return ['getSymbol', symbol];
     } else {
       let symbol = this.symbols.allocateFree(name);
-      return ['getFree', symbol];
+      return ['getFreeWithContext', [symbol, context]];
     }
   }
 

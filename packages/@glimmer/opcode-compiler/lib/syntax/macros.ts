@@ -15,6 +15,7 @@ import {
 } from '@glimmer/interfaces';
 import { dict, assert } from '@glimmer/util';
 import { UNHANDLED } from './concat';
+import { expectString } from '../utils';
 
 export class MacrosImpl implements Macros {
   public blocks: MacroBlocks;
@@ -127,12 +128,9 @@ export class Inlines implements MacroInlines {
     let hash: Option<WireFormat.Core.Hash>;
 
     if (value[0] === SexpOpcodes.Call) {
-      name = value[1];
+      name = expectString(value[1], context.meta, 'Expected head of call to be a string');
       params = value[2];
       hash = value[3];
-    } else if (value[0] === SexpOpcodes.Unknown) {
-      name = value[1];
-      params = hash = null;
     } else {
       return UNHANDLED;
     }

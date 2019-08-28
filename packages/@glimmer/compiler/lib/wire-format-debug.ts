@@ -5,7 +5,7 @@ import {
   SerializedInlineBlock,
   SerializedTemplateBlock,
 } from '@glimmer/interfaces';
-import { dict } from '@glimmer/util';
+import { dict, assertNever } from '@glimmer/util';
 
 export default class WireFormatDebugger {
   constructor(private program: SerializedTemplateBlock, _parameters?: number[]) {}
@@ -113,6 +113,9 @@ export default class WireFormatDebugger {
         case Op.GetFree:
           return ['get-free', this.program.upvars[opcode[1]]];
 
+        case Op.GetContextualFree:
+          return ['get-contextual-free', this.program.upvars[opcode[1]], opcode[2]];
+
         case Op.GetPath:
           return ['get-path', this.formatOpcode(opcode[1]), opcode[2]];
 
@@ -138,7 +141,7 @@ export default class WireFormatDebugger {
 
         default: {
           let opName = opcode[0];
-          throw new Error(`unexpected ${opName}`);
+          throw assertNever(opName, `unexpected ${opName}`);
         }
       }
     } else {

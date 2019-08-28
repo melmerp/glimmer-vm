@@ -1,5 +1,5 @@
 import { AST } from '@glimmer/syntax';
-import { Option, WireFormat } from '@glimmer/interfaces';
+import { Option, WireFormat, ExpressionContext } from '@glimmer/interfaces';
 
 /**
   - 0 - represents `this`
@@ -53,7 +53,7 @@ export interface AllocateSymbolsOps {
   trustingAttr: [string, Option<string>];
   attrSplat: void;
 
-  getVar: string;
+  getVar: [string, ExpressionContext];
   getArg: string;
   getFree: string;
   getThis: void;
@@ -96,6 +96,7 @@ export interface JavaScriptCompilerOps {
   getPath: string[];
   getSymbol: number;
   getFree: number;
+  getFreeWithContext: [number, ExpressionContext];
   yield: number;
 
   hasBlock: number;

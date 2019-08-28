@@ -41,6 +41,8 @@ export interface AllOpMap {
 
   IfResolved: IfResolvedOp;
   Expr: ExprOp;
+  ResolveFree: ResolveFreeOp;
+  ResolveContextualFree: ResolveContextualFreeOp;
   SimpleArgs: SimpleArgsOp;
 
   CompileInline: CompileInlineOp;
@@ -84,6 +86,8 @@ export const enum HighLevelCompileOpcode {
 export const enum HighLevelResolutionOpcode {
   IfResolved = 'IfResolved',
   Expr = 'Expr',
+  ResolveFree = 'ResolveFree',
+  ResolveContextualFree = 'ResolveContextualFree',
   SimpleArgs = 'SimpleArgs',
 }
 
@@ -200,7 +204,12 @@ export type HighLevelCompileOp =
 
 export type HighLevelCompileOperands = [HighLevelCompileOp['op1']];
 
-export type HighLevelResolutionOp = IfResolvedOp | ExprOp | SimpleArgsOp;
+export type HighLevelResolutionOp =
+  | IfResolvedOp
+  | ExprOp
+  | ResolveFreeOp
+  | ResolveContextualFreeOp
+  | SimpleArgsOp;
 
 export type BuilderOpcode = Op | MachineOp;
 
@@ -270,6 +279,21 @@ export interface ExprOp {
   type: 'Resolution';
   op: HighLevelResolutionOpcode.Expr;
   op1: WireFormat.Expression;
+}
+
+export interface ResolveFreeOp {
+  type: 'Resolution';
+  op: HighLevelResolutionOpcode.ResolveFree;
+  op1: number;
+}
+
+export interface ResolveContextualFreeOp {
+  type: 'Resolution';
+  op: HighLevelResolutionOpcode.ResolveContextualFree;
+  op1: {
+    freeVar: number;
+    context: WireFormat.ExpressionContext;
+  };
 }
 
 export interface GetComponentLayoutOp {

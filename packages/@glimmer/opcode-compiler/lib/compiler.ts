@@ -9,7 +9,7 @@ import {
   TemplateCompilationContext,
 } from '@glimmer/interfaces';
 import { DEBUG } from '@glimmer/local-debug-flags';
-import { namedBlocks } from './utils';
+import { namedBlocks, expectString } from './utils';
 
 export function compileInline(
   sexp: Statements.Append,
@@ -24,7 +24,13 @@ export function compileBlock(
 ): StatementCompileActions {
   let [, name, params, hash, named] = block;
   let blocks = namedBlocks(named, context.meta);
-  return context.syntax.macros.blocks.compile(name, params, hash, blocks, context);
+  return context.syntax.macros.blocks.compile(
+    expectString(name, context.meta, 'Expected block head to be a string'),
+    params || [],
+    hash,
+    blocks,
+    context
+  );
 }
 
 export function commit(heap: CompileTimeHeap, scopeSize: number, buffer: CompilerBuffer): number {

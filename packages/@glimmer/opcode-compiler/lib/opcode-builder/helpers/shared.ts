@@ -73,6 +73,7 @@ export function meta<R>(layout: LayoutWithContext<R>): ContainingMetadata {
   return {
     asPartial: layout.asPartial || false,
     evalSymbols: evalSymbols(layout),
+    upvars: layout.block.upvars,
     referrer: layout.referrer,
     size: layout.block.symbols.length,
   };

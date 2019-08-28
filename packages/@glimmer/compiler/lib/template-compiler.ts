@@ -6,6 +6,7 @@ import { getAttrNamespace } from './utils';
 import { SymbolAllocator } from './allocate-symbols';
 import { PathHead, Processor, InputOps, AllocateSymbolsOps, Ops } from './compiler-ops';
 import { DEBUG } from '@glimmer/local-debug-flags';
+import { ExpressionContext } from '@glimmer/interfaces';
 
 export interface CompileOptions {
   meta?: unknown;
@@ -101,7 +102,7 @@ export default class TemplateCompiler implements Processor<InputOps> {
       let head: PathHead, rest: string[];
       [head, ...rest] = action.tag.split('.');
 
-      this.path(head, rest, action);
+      this.path(head, rest, ExpressionContext.None, action);
 
       this.opcode(['openComponent', action], action);
       actionIsComponent = true;
@@ -195,7 +196,7 @@ export default class TemplateCompiler implements Processor<InputOps> {
 
   modifier([action]: [AST.ElementModifierStatement]) {
     this.prepareHelper(action);
-    this.pathExpression(action.path, action);
+    this.expression(action.path, ExpressionContext.ModifierHead, action);
     this.opcode(['modifier'], action);
   }
 
@@ -203,7 +204,7 @@ export default class TemplateCompiler implements Processor<InputOps> {
     let { path } = mustache;
 
     if (isLiteral(path)) {
-      this.pathExpression(mustache.path, mustache);
+      this.expression(mustache.path, ExpressionContext.None, mustache);
       this.opcode(['append', !mustache.escaped], mustache);
     } else if (path.type !== 'PathExpression') {
       throw new SyntaxError(`Expected PathExpression, got ${path.type}`, path.loc);
@@ -218,11 +219,11 @@ export default class TemplateCompiler implements Processor<InputOps> {
       this.debugger('debugger', mustache);
     } else if (isHelperInvocation(mustache)) {
       this.prepareHelper(mustache);
-      this.pathExpression(mustache.path, mustache);
+      this.expression(mustache.path, ExpressionContext.CallHead, mustache);
       this.opcode(['helper'], mustache);
       this.opcode(['append', !mustache.escaped], mustache);
     } else {
-      this.pathExpression(mustache.path, mustache);
+      this.expression(mustache.path, ExpressionContext.None, mustache);
       this.opcode(['append', !mustache.escaped], mustache);
     }
   }
@@ -231,19 +232,19 @@ export default class TemplateCompiler implements Processor<InputOps> {
     this.prepareHelper(action);
     let templateId = this.templateIds.pop()!;
     let inverseId = action.inverse === null ? null : this.templateIds.pop()!;
-    this.pathExpression(action.path, action);
+    this.expression(action.path, ExpressionContext.BlockHead, action);
     this.opcode(['block', [templateId, inverseId]], action);
   }
 
   /// Internal actions, not found in the original processed actions
 
-  private path(head: string, rest: string[], loc: AST.BaseNode) {
+  private path(head: string, rest: string[], context: ExpressionContext, loc: AST.BaseNode) {
     if (head === 'this') {
       this.thisPath(rest, loc);
     } else if (head[0] === '@') {
       this.argPath(head, rest, loc);
     } else {
-      this.varPath(head, rest, loc);
+      this.varPath(head, rest, context, loc);
     }
   }
 
@@ -252,8 +253,8 @@ export default class TemplateCompiler implements Processor<InputOps> {
     this.opcode(['getPath', rest], loc);
   }
 
-  private varPath(head: string, rest: string[], loc: AST.BaseNode) {
-    this.opcode(['getVar', head], loc);
+  private varPath(head: string, rest: string[], context: ExpressionContext, loc: AST.BaseNode) {
+    this.opcode(['getVar', [head, context]], loc);
     this.opcode(['getPath', rest], loc);
   }
 
@@ -262,27 +263,19 @@ export default class TemplateCompiler implements Processor<InputOps> {
     this.opcode(['getPath', rest], loc);
   }
 
-  pathExpression(path: AST.Expression, expr: AST.Node) {
+  private expression(path: AST.Expression, context: ExpressionContext, expr: AST.Node) {
     if (isLiteral(path)) {
       this.opcode(['literal', path.value], expr);
     } else if (path.type !== 'PathExpression') {
       throw new SyntaxError(`Expected PathExpression, got ${path.type}`, path.loc);
-    } else if (isBuiltInHelper(expr)) {
-      this.builtInHelper(expr as AST.Call);
+    } else if (isKeyword(expr)) {
+      this.keyword(expr as AST.Call);
     } else if (path.this) {
       throw new Error(`Unexpected path.this in ${JSON.stringify(path)} in ${JSON.stringify(expr)}`);
     } else {
       let [head, ...rest] = path.parts;
-      this.path(head, rest, expr);
+      this.path(head, rest, context, expr);
     }
-    // } else if (isArg(path)) {
-    //   this.argPath([path]);
-    // } else if (path.this) {
-    //   this.opcode(['getThis', path.parts], expr);
-    // } else {
-    //   let [head, ...parts] = path.parts;
-    //   this.opcode(['getVar', [head, parts]], expr);
-    // }
   }
 
   /// Internal Syntax
@@ -309,7 +302,7 @@ export default class TemplateCompiler implements Processor<InputOps> {
     this.opcode(['partial'], action);
   }
 
-  builtInHelper(action: AST.Call) {
+  keyword(action: AST.Call) {
     let { path } = action;
 
     if (isHasBlock(path)) {
@@ -324,18 +317,18 @@ export default class TemplateCompiler implements Processor<InputOps> {
   /// Expressions, invoked recursively from prepareParams and prepareHash
 
   SubExpression(expr: AST.SubExpression) {
-    if (isBuiltInHelper(expr.path)) {
-      this.builtInHelper(expr);
+    if (isKeyword(expr.path)) {
+      this.keyword(expr);
     } else {
       this.prepareHelper(expr);
-      this.pathExpression(expr.path, expr);
+      this.expression(expr.path, ExpressionContext.CallHead, expr);
       this.opcode(['helper']);
     }
   }
 
   PathExpression(expr: AST.PathExpression) {
     let [head, ...rest] = expr.parts;
-    this.path(head, rest, expr);
+    this.path(head, rest, ExpressionContext.None, expr);
   }
 
   StringLiteral(action: AST.StringLiteral) {
@@ -371,13 +364,13 @@ export default class TemplateCompiler implements Processor<InputOps> {
 
   helperCall(call: AST.Call, node: AST.Node) {
     this.prepareHelper(call);
-    this.pathExpression(call.path, node);
+    this.expression(call.path, ExpressionContext.CallHead, node);
     this.opcode(['helper'], node);
   }
 
   mustacheCall(call: AST.MustacheStatement) {
     this.prepareHelper(call);
-    this.pathExpression(call.path, call);
+    this.expression(call.path, ExpressionContext.CallHead, call);
     this.opcode(['helper'], call);
   }
 
@@ -453,10 +446,10 @@ export default class TemplateCompiler implements Processor<InputOps> {
       return true;
     } else if (isHelperInvocation(value)) {
       this.prepareHelper(value);
-      this.pathExpression(value.path, value);
+      this.expression(value.path, ExpressionContext.CallHead, value);
       this.opcode(['helper'], value);
     } else {
-      this.pathExpression(value.path, value);
+      this.expression(value.path, ExpressionContext.None, value);
     }
 
     return false;
@@ -512,7 +505,7 @@ function isHasBlockParams(path: AST.Expression): path is AST.PathExpression {
   return path.original === 'has-block-params';
 }
 
-function isBuiltInHelper(node: AST.Node | AST.Call): node is AST.Call {
+function isKeyword(node: AST.Node | AST.Call): node is AST.Call {
   if (node.type === 'SubExpression') {
     return isHasBlock(node.path) || isHasBlockParams(node.path);
   } else {

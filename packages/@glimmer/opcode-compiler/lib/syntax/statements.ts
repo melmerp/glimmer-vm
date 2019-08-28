@@ -13,6 +13,7 @@ import { replayableIf } from '../opcode-builder/helpers/conditional';
 import { yieldBlock } from '../opcode-builder/helpers/blocks';
 import { EMPTY_ARRAY } from '@glimmer/util';
 import { $sp } from '@glimmer/vm';
+import { expectString } from '../utils';
 
 export const STATEMENTS = new StatementCompilers();
 
@@ -20,12 +21,12 @@ STATEMENTS.add(SexpOpcodes.Comment, sexp => op(Op.Comment, sexp[1]));
 STATEMENTS.add(SexpOpcodes.CloseElement, () => op(Op.CloseElement));
 STATEMENTS.add(SexpOpcodes.FlushElement, () => op(Op.FlushElement));
 
-STATEMENTS.add(SexpOpcodes.Modifier, sexp => {
+STATEMENTS.add(SexpOpcodes.Modifier, (sexp, meta) => {
   let [, name, params, hash] = sexp;
 
   return op('IfResolved', {
     kind: ResolveHandle.Modifier,
-    name,
+    name: expectString(name, meta, 'Expected modifier head to be a string'),
     andThen: handle => [
       op(MachineOp.PushFrame),
       op('SimpleArgs', { params, hash, atNames: false }),

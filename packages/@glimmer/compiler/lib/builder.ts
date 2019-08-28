@@ -1,4 +1,4 @@
-import { WireFormat, Option, Dict, Expressions } from '@glimmer/interfaces';
+import { WireFormat, Option, Dict, Expressions, ExpressionContext } from '@glimmer/interfaces';
 
 import Op = WireFormat.SexpOpcodes;
 import { dict, assertNever, assert } from '@glimmer/util';
@@ -179,18 +179,30 @@ export function buildStatement(
 ): WireFormat.Statement[] {
   switch (normalized.kind) {
     case HeadKind.AppendPath: {
-      return [[Op.Append, buildPath(normalized.path, symbols), normalized.trusted]];
+      return [
+        [
+          Op.Append,
+          buildPath(normalized.path, ExpressionContext.None, symbols),
+          normalized.trusted,
+        ],
+      ];
     }
 
     case HeadKind.AppendExpr: {
-      return [[Op.Append, buildExpression(normalized.expr, symbols), normalized.trusted]];
+      return [
+        [
+          Op.Append,
+          buildExpression(normalized.expr, ExpressionContext.None, symbols),
+          normalized.trusted,
+        ],
+      ];
     }
 
     case HeadKind.Call: {
       let { path, params, hash, trusted } = normalized;
       let builtParams: Option<WireFormat.Core.Params> = params ? buildParams(params, symbols) : [];
       let builtHash: WireFormat.Core.Hash = hash ? buildHash(hash, symbols) : null;
-      let builtExpr: WireFormat.Expression = buildPath(path, symbols);
+      let builtExpr: WireFormat.Expression = buildPath(path, ExpressionContext.CallHead, symbols);
 
       return [[Op.Append, [Op.Call, builtExpr, builtParams, builtHash], trusted]];
     }
@@ -207,7 +219,7 @@ export function buildStatement(
       let blocks = buildBlocks(normalized.blocks, normalized.blockParams, symbols);
       let hash = buildHash(normalized.hash, symbols);
       let params = buildParams(normalized.params, symbols);
-      let path = buildPath(normalized.path, symbols);
+      let path = buildPath(normalized.path, ExpressionContext.BlockHead, symbols);
 
       return [[Op.Block, path, params, hash, blocks]];
     }
@@ -302,7 +314,7 @@ export function buildAngleInvocation(
 
   return [
     Op.DynamicComponent,
-    buildExpression(head, symbols),
+    buildExpression(head, ExpressionContext.None, symbols),
     attrList,
     args,
     [['default'], [{ parameters: [], statements: blockList }]],
@@ -324,7 +336,7 @@ export function buildAttrs(
       attributes.push([Op.AttrSplat, symbols.block('&attrs')]);
     } else if (key[0] === '@') {
       keys.push(key);
-      values.push(buildExpression(value, symbols));
+      values.push(buildExpression(value, ExpressionContext.None, symbols));
     } else {
       attributes.push(
         ...buildAttributeValue(
@@ -388,17 +400,20 @@ export function buildAttributeValue(
     }
 
     default:
-      return [[Op.DynamicAttr, name, buildExpression(value, symbols), namespace]];
+      return [
+        [Op.DynamicAttr, name, buildExpression(value, ExpressionContext.None, symbols), namespace],
+      ];
   }
 }
 
 export function buildExpression(
   expr: NormalizedExpression,
+  context: ExpressionContext,
   symbols: Symbols
 ): WireFormat.Expression {
   switch (expr.type) {
     case ExpressionKind.Get: {
-      return buildPath(expr.path, symbols);
+      return buildPath(expr.path, context, symbols);
     }
 
     case ExpressionKind.Concat: {
@@ -408,17 +423,23 @@ export function buildExpression(
     case ExpressionKind.Call: {
       let builtParams = buildParams(expr.params, symbols);
       let builtHash = buildHash(expr.hash, symbols);
-      let builtExpr = buildPath(expr.path, symbols);
+      let builtExpr = buildPath(expr.path, ExpressionContext.CallHead, symbols);
 
       return [Op.Call, builtExpr, builtParams, builtHash];
     }
 
     case ExpressionKind.HasBlock: {
-      return [Op.HasBlock, buildVar({ kind: VariableKind.Block, name: expr.name }, symbols)];
+      return [
+        Op.HasBlock,
+        buildVar({ kind: VariableKind.Block, name: expr.name }, ExpressionContext.None, symbols),
+      ];
     }
 
     case ExpressionKind.HasBlockParams: {
-      return [Op.HasBlockParams, buildVar({ kind: VariableKind.Block, name: expr.name }, symbols)];
+      return [
+        Op.HasBlockParams,
+        buildVar({ kind: VariableKind.Block, name: expr.name }, ExpressionContext.None, symbols),
+      ];
     }
 
     case ExpressionKind.Literal: {
@@ -430,17 +451,22 @@ export function buildExpression(
     }
   }
 }
-export function buildPath(path: Path, symbols: Symbols): Expressions.GetPath {
-  return [Op.GetPath, buildVar(path.variable, symbols), path.tail];
+export function buildPath(
+  path: Path,
+  context: ExpressionContext,
+  symbols: Symbols
+): Expressions.GetPath {
+  return [Op.GetPath, buildVar(path.variable, context, symbols), path.tail];
 }
 
 export function buildVar(
   head: Variable,
+  context: ExpressionContext,
   symbols: Symbols
-): Expressions.GetSymbol | Expressions.GetFree {
+): Expressions.GetSymbol | Expressions.GetFree | Expressions.GetContextualFree {
   switch (head.kind) {
     case VariableKind.Free:
-      return [Op.GetFree, symbols.freeVar(head.name)];
+      return [Op.GetContextualFree, symbols.freeVar(head.name), context];
     case VariableKind.Arg:
       return [Op.GetSymbol, symbols.arg(head.name)];
     case VariableKind.Block:
@@ -456,14 +482,16 @@ export function buildParams(
 ): Option<WireFormat.Core.Params> {
   if (exprs === null) return null;
 
-  return exprs.map(e => buildExpression(e, symbols));
+  return exprs.map(e => buildExpression(e, ExpressionContext.None, symbols));
 }
 
 export function buildConcat(
   exprs: [NormalizedExpression, ...NormalizedExpression[]],
   symbols: Symbols
 ): WireFormat.Core.ConcatParams {
-  return exprs.map(e => buildExpression(e, symbols)) as WireFormat.Core.ConcatParams;
+  return exprs.map(e =>
+    buildExpression(e, ExpressionContext.None, symbols)
+  ) as WireFormat.Core.ConcatParams;
 }
 
 export function buildHash(exprs: Option<NormalizedHash>, symbols: Symbols): WireFormat.Core.Hash {
@@ -473,7 +501,7 @@ export function buildHash(exprs: Option<NormalizedHash>, symbols: Symbols): Wire
 
   Object.keys(exprs).forEach(key => {
     out[0].push(key);
-    out[1].push(buildExpression(exprs[key], symbols));
+    out[1].push(buildExpression(exprs[key], ExpressionContext.None, symbols));
   });
 
   return out;

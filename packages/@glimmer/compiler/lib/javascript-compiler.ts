@@ -13,6 +13,7 @@ import {
   SexpOpcodes,
   Expression,
   Expressions,
+  ExpressionContext,
 } from '@glimmer/interfaces';
 
 export type str = string;
@@ -408,6 +409,10 @@ export default class JavaScriptCompiler implements Processor<JavaScriptCompilerO
 
   getFree(head: number) {
     this.pushValue<Expressions.GetFree>([SexpOpcodes.GetFree, head]);
+  }
+
+  getFreeWithContext([head, context]: [number, ExpressionContext]) {
+    this.pushValue<Expressions.GetContextualFree>([SexpOpcodes.GetContextualFree, head, context]);
   }
 
   concat() {

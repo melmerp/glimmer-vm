@@ -110,7 +110,7 @@ export interface MustacheStatement extends BaseNode {
 
 export interface BlockStatement extends BaseNode {
   type: 'BlockStatement';
-  path: PathExpression;
+  path: Expression;
   params: Expression[];
   hash: Hash;
   program: Block;
@@ -126,7 +126,7 @@ export interface BlockStatement extends BaseNode {
 
 export interface ElementModifierStatement extends BaseNode {
   type: 'ElementModifierStatement';
-  path: PathExpression;
+  path: Expression;
   params: Expression[];
   hash: Hash;
 }

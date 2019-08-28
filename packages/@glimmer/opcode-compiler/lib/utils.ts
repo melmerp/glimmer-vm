@@ -58,3 +58,32 @@ export function namedBlocks(blocks: WireFormat.Core.Blocks, meta: ContainingMeta
 
   return new NamedBlocksImpl(out);
 }
+
+export function expectString(
+  expr: WireFormat.Expression,
+  meta: ContainingMetadata,
+  desc: string
+): string {
+  if (!meta.upvars) {
+    throw new Error(`${desc}, but there were no free variables in the template`);
+  }
+
+  if (!Array.isArray(expr) || expr[0] !== WireFormat.SexpOpcodes.GetPath) {
+    throw new Error(`${desc}, got ${JSON.stringify(expr)}`);
+  }
+
+  if (expr[2].length !== 0) {
+    throw new Error(`${desc}, got ${JSON.stringify(expr)}`);
+  }
+
+  if (
+    expr[1][0] === WireFormat.SexpOpcodes.GetContextualFree ||
+    expr[1][0] === WireFormat.SexpOpcodes.GetFree
+  ) {
+    let head = expr[1][1];
+
+    return meta.upvars[head];
+  }
+
+  throw new Error(`${desc}, got ${JSON.stringify(expr)}`);
+}

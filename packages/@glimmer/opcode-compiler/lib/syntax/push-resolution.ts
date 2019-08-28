@@ -12,6 +12,7 @@ import {
   CompileTimeConstants,
   ContainingMetadata,
   TemplateCompilationContext,
+  ExpressionContext,
 } from '@glimmer/interfaces';
 import { compileParams } from '../opcode-builder/helpers/shared';
 import { exhausted, EMPTY_ARRAY } from '@glimmer/util';
@@ -24,27 +25,50 @@ import { EXPRESSIONS } from './expressions';
 export default function pushResolutionOp(
   encoder: Encoder,
   context: TemplateCompilationContext,
-  op: HighLevelResolutionOp,
+  operation: HighLevelResolutionOp,
   constants: CompileTimeConstants
 ): void {
-  switch (op.op) {
+  switch (operation.op) {
     case HighLevelResolutionOpcode.SimpleArgs:
       concatExpressions(
         encoder,
         context,
-        compileSimpleArgs(op.op1.params, op.op1.hash, op.op1.atNames),
+        compileSimpleArgs(operation.op1.params, operation.op1.hash, operation.op1.atNames),
         constants
       );
       break;
     case HighLevelResolutionOpcode.Expr:
-      concatExpressions(encoder, context, expr(op.op1, context.meta), constants);
+      concatExpressions(encoder, context, expr(operation.op1, context.meta), constants);
       break;
     case HighLevelResolutionOpcode.IfResolved: {
-      concatExpressions(encoder, context, ifResolved(context, op), constants);
+      concatExpressions(encoder, context, ifResolved(context, operation), constants);
+      break;
+    }
+    case HighLevelResolutionOpcode.ResolveFree: {
+      debugger;
+      throw new Error('Unimplemented HighLevelResolutionOpcode.ResolveFree');
+    }
+    case HighLevelResolutionOpcode.ResolveContextualFree: {
+      let { freeVar, context: expressionContext } = operation.op1;
+
+      switch (expressionContext) {
+        case ExpressionContext.None: {
+          // in classic mode, this is always a this-fallback
+          let name = context.meta.upvars![freeVar];
+
+          concatExpressions(
+            encoder,
+            context,
+            [op(Op.GetVariable, 0), op(Op.GetProperty, name)],
+            constants
+          );
+        }
+      }
+
       break;
     }
     default:
-      return exhausted(op);
+      return exhausted(operation);
   }
 }
 

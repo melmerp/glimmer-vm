@@ -54,6 +54,7 @@ export function compileStd(context: WholeProgramCompilationContext): StdLib {
 const STDLIB_META = {
   asPartial: false,
   evalSymbols: null,
+  upvars: null,
 
   // TODO: ??
   referrer: {},

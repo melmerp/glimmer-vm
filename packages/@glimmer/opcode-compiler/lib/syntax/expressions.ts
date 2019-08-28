@@ -1,26 +1,12 @@
 import { ExpressionCompilers } from './compilers';
-import { SexpOpcodes, ResolveHandle, Op } from '@glimmer/interfaces';
+import { SexpOpcodes, ResolveHandle, Op, Expressions } from '@glimmer/interfaces';
 import { op } from '../opcode-builder/encoder';
 import { helper, pushPrimitiveReference } from '../opcode-builder/helpers/vm';
 import { assert } from '@glimmer/util';
 import { curryComponent } from '../opcode-builder/helpers/components';
+import { expectString } from '../utils';
 
 export const EXPRESSIONS = new ExpressionCompilers();
-
-EXPRESSIONS.add(SexpOpcodes.Unknown, ([, name], meta) => {
-  return op('IfResolved', {
-    kind: ResolveHandle.Helper,
-    name,
-    andThen: handle => helper({ handle, params: null, hash: null }),
-    orElse: () => {
-      if (meta.asPartial) {
-        return op(Op.ResolveMaybeLocal, name);
-      } else {
-        return [op(Op.GetVariable, 0), op(Op.GetProperty, name)];
-      }
-    },
-  });
-});
 
 EXPRESSIONS.add(SexpOpcodes.Concat, ([, parts]) => {
   let out = [];
@@ -37,9 +23,12 @@ EXPRESSIONS.add(SexpOpcodes.Concat, ([, parts]) => {
 EXPRESSIONS.add(SexpOpcodes.Call, ([, name, params, hash], meta) => {
   // TODO: triage this in the WF compiler
   if (name === 'component') {
-    assert(params.length, 'SYNTAX ERROR: component helper requires at least one argument');
+    assert(
+      params && params.length,
+      'SYNTAX ERROR: component helper requires at least one argument'
+    );
 
-    let [definition, ...restArgs] = params;
+    let [definition, ...restArgs] = params as Expressions.Expression[];
     return curryComponent(
       {
         definition,
@@ -53,40 +42,29 @@ EXPRESSIONS.add(SexpOpcodes.Call, ([, name, params, hash], meta) => {
 
   return op('IfResolved', {
     kind: ResolveHandle.Helper,
-    name,
+    name: expectString(name, meta, 'Expected call head to be a string'),
     andThen: handle => helper({ handle, params, hash }),
   });
 });
 
-EXPRESSIONS.add(SexpOpcodes.GetSymbol, ([, head, path]) => [
-  op(Op.GetVariable, head),
-  ...path.map(p => op(Op.GetProperty, p)),
-]);
+EXPRESSIONS.add(SexpOpcodes.GetSymbol, ([, head]) => [op(Op.GetVariable, head)]);
 
-EXPRESSIONS.add(SexpOpcodes.MaybeLocal, ([, path], meta) => {
-  let out = [];
-
-  if (meta.asPartial) {
-    let head = path[0];
-    path = path.slice(1);
-
-    out.push(op(Op.ResolveMaybeLocal, head));
-  } else {
-    out.push(op(Op.GetVariable, 0));
-  }
-
-  for (let i = 0; i < path.length; i++) {
-    out.push(op(Op.GetProperty, path[i]));
-  }
-
-  return out;
+EXPRESSIONS.add(SexpOpcodes.GetPath, ([, head, tail]) => {
+  return [op('Expr', head), ...tail.map(p => op(Op.GetProperty, p))];
 });
 
+EXPRESSIONS.add(SexpOpcodes.GetFree, ([, head]) => op('ResolveFree', head));
+
+EXPRESSIONS.add(SexpOpcodes.GetContextualFree, ([, head, context]) =>
+  op('ResolveContextualFree', { freeVar: head, context })
+);
+
 EXPRESSIONS.add(SexpOpcodes.Undefined, () => pushPrimitiveReference(undefined));
-EXPRESSIONS.add(SexpOpcodes.HasBlock, ([, symbol]) => op(Op.HasBlock, symbol));
+EXPRESSIONS.add(SexpOpcodes.HasBlock, ([, symbol]) => [op('Expr', symbol), op(Op.HasBlock)]);
 
 EXPRESSIONS.add(SexpOpcodes.HasBlockParams, ([, symbol]) => [
-  op(Op.GetBlock, symbol),
+  op('Expr', symbol),
+  op(Op.GetBlock),
   op('JitCompileBlock'),
   op(Op.HasBlockParams),
 ]);
