@@ -238,7 +238,6 @@ export default class TemplateCompiler implements Processor<InputOps> {
   /// Internal actions, not found in the original processed actions
 
   private path(head: string, rest: string[], loc: AST.BaseNode) {
-    this.debugger;
     if (head === 'this') {
       this.thisPath(rest, loc);
     } else if (head[0] === '@') {

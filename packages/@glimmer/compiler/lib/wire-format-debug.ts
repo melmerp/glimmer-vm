@@ -111,7 +111,7 @@ export default class WireFormatDebugger {
           return ['get-symbol', opcode[1]];
 
         case Op.GetFree:
-          return ['get-free', opcode[1]];
+          return ['get-free', this.program.upvars[opcode[1]]];
 
         case Op.GetPath:
           return ['get-path', this.formatOpcode(opcode[1]), opcode[2]];
@@ -134,7 +134,7 @@ export default class WireFormatDebugger {
           ];
 
         case Op.Concat:
-          return ['concat', this.formatParams(opcode[1])];
+          return ['concat', this.formatParams(opcode[1] as WireFormat.Core.Params)];
 
         default: {
           let opName = opcode[0];

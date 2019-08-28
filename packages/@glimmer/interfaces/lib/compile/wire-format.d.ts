@@ -93,6 +93,7 @@ export namespace Core {
 
   export type Path = str[];
   export type Params = Expression[];
+  export type ConcatParams = [Expression, ...Expression[]];
   export type Hash = Option<[str[], Expression[]]>;
   export type Blocks = Option<[str[], SerializedInlineBlock[]]>;
   export type Args = [Params, Hash];
@@ -127,8 +128,8 @@ export namespace Expressions {
 
   type Recursive<T> = T;
 
-  export interface Concat extends Recursive<[SexpOpcodes.Concat, Params]> {}
-  export interface Helper extends Recursive<[SexpOpcodes.Call, Expression, Params, Hash]> {}
+  export interface Concat extends Recursive<[SexpOpcodes.Concat, Core.ConcatParams]> {}
+  export interface Helper extends Recursive<[SexpOpcodes.Call, Expression, Option<Params>, Hash]> {}
   export interface HasBlock extends Recursive<[SexpOpcodes.HasBlock, Expression]> {}
   export interface HasBlockParams extends Recursive<[SexpOpcodes.HasBlockParams, Expression]> {}
 }
@@ -148,7 +149,7 @@ export namespace Statements {
   export type Append = [SexpOpcodes.Append, Expression, boolean];
   export type Comment = [SexpOpcodes.Comment, str];
   export type Modifier = [SexpOpcodes.Modifier, Expression, Params, Hash];
-  export type Block = [SexpOpcodes.Block, Expression, Params, Hash, Blocks];
+  export type Block = [SexpOpcodes.Block, Expression, Option<Params>, Hash, Blocks];
   export type Component = [SexpOpcodes.Component, str, Attribute[], Hash, Blocks];
   export type DynamicComponent = [
     SexpOpcodes.DynamicComponent,

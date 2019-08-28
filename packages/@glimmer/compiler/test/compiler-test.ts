@@ -1,11 +1,10 @@
 import {
   precompile,
-  WireFormatBuilder,
   WireFormatDebugger,
-  InlineBlockBuilder,
   BuilderStatement,
   ProgramSymbols,
   buildStatements,
+  Builder,
   s,
   c,
   NEWLINE,
@@ -17,7 +16,6 @@ import {
   SerializedTemplateBlock,
 } from '@glimmer/interfaces';
 import { assign, strip } from '@glimmer/util';
-import { Namespace } from '@simple-dom/interface';
 
 QUnit.module('@glimmer/compiler - compiling source to wire format');
 
@@ -28,22 +26,6 @@ function compile(content: string): SerializedTemplate<unknown> {
   let block = JSON.parse(parsed.block);
 
   return assign({}, parsed, { block });
-}
-
-function test1(desc: string, template: string, expectedFn: (b: WireFormatBuilder) => void) {
-  QUnit.skip(desc, assert => {
-    let actual = compile(template);
-
-    let builder = new WireFormatBuilder();
-    expectedFn(builder);
-
-    let expected = builder.toTemplate({ meta: null, id: null });
-
-    let debugExpected = new WireFormatDebugger(expected.block).format();
-    let debugActual = new WireFormatDebugger(actual.block).format();
-
-    assert.deepEqual(debugActual, debugExpected);
-  });
 }
 
 function test(desc: string, template: string, ...expectedStatements: BuilderStatement[]) {
@@ -68,11 +50,14 @@ function test(desc: string, template: string, ...expectedStatements: BuilderStat
   });
 }
 
+const Append = Builder.Append;
+const Concat = Builder.Concat;
+
 test('HTML text content', 'content', s`content`);
 
 test('Text curlies', '<div>{{title}}<span>{{title}}</span></div>', [
   '<div>',
-  [['append', '^title'], ['<span>', [['append', '^title']]]],
+  [[Append, '^title'], ['<span>', [[Append, '^title']]]],
 ]);
 
 // test(
@@ -203,7 +188,7 @@ test(
   "<fake-thing><other-fake-thing data-src='extra-{{someDynamicBits}}-here' /></fake-thing>",
   [
     '<fake-thing>',
-    [['<other-fake-thing>', { 'data-src': ['concat', [s`extra-`, '^someDynamicBits', s`-here`]] }]],
+    [['<other-fake-thing>', { 'data-src': [Concat, s`extra-`, '^someDynamicBits', s`-here`] }]],
   ]
 );
 
@@ -212,10 +197,7 @@ test('Custom Elements with dynamic content', '<x-foo><x-bar>{{derp}}</x-bar></x-
   [['<x-bar>', ['^derp']]],
 ]);
 
-test('helpers', '<div>{{testing title}}</div>', [
-  '<div>',
-  [['append', ['call', '^testing', ['^title'], null]]],
-]);
+test('helpers', '<div>{{testing title}}</div>', ['<div>', [['(^testing)', ['^title']]]]);
 
 test(
   'Dynamic content within single custom element',
@@ -239,7 +221,7 @@ test('empty attributes', `<div class=''>content</div>`, ['<div>', { class: s`` }
 
 test('helpers in string attributes', `<a href="http://{{testing 123}}/index.html">linky</a>`, [
   '<a>',
-  { href: ['concat', [s`http://`, ['call', '^testing', [123]], s`/index.html`]] },
+  { href: [Concat, s`http://`, ['(^testing)', [123]], s`/index.html`] },
   [s`linky`],
 ]);
 
@@ -247,14 +229,14 @@ test(`boolean attribute 'disabled'`, '<input disabled>', ['<input>', { disabled:
 
 test(`string quoted attributes`, `<input disabled="{{isDisabled}}">`, [
   '<input>',
-  { disabled: ['concat', ['^isDisabled']] },
+  { disabled: [Concat, '^isDisabled'] },
 ]);
 
 test(`unquoted attributes`, `<img src={{src}}>`, ['<img>', { src: '^src' }]);
 
 test(`dynamic attr followed by static attr`, `<div foo='{{funstuff}}' name='Alice'></div>`, [
   '<div>',
-  { foo: ['concat', ['^funstuff']], name: s`Alice` },
+  { foo: [Concat, '^funstuff'], name: s`Alice` },
 ]);
 
 test(
@@ -345,7 +327,7 @@ test(
   [
     '<svg>',
     { 'xmlns:xlink': s`http://www.w3.org/1999/xlink` },
-    [['<use>', { 'xlink:href': ['concat', ['^iconLink']] }]],
+    [['<use>', { 'xlink:href': [Concat, '^iconLink'] }]],
   ]
 );
 
@@ -372,414 +354,240 @@ test('<svg> tag with case-sensitive attribute', '<svg viewBox="0 0 0 0"></svg>',
     '<svg>',
     [['<path>', { d: s`${d}` }]],
   ]);
-
-  // b =>
-  //   b.element('svg', b =>
-  //     b.element('path', {
-  //       attrs: b => b.attr('d', d),
-  //     })
-  //   )
-  // );
 }
 
-test1(`<foreignObject> tag is case-sensitive`, `<svg><foreignObject>Hi</foreignObject></svg>`, b =>
-  b.element('svg', b => b.element('foreignObject', b => b.text('Hi')))
-);
+test(`<foreignObject> tag is case-sensitive`, `<svg><foreignObject>Hi</foreignObject></svg>`, [
+  '<svg>',
+  [['<foreignObject>', [s`Hi`]]],
+]);
 
-test1('svg alongside non-svg', `<svg></svg><svg></svg><div></div>`, b =>
-  b
-    .element('svg')
-    .element('svg')
-    .element('div')
-);
+test('svg alongside non-svg', `<svg></svg><svg></svg><div></div>`, ['<svg>'], ['<svg>'], ['<div>']);
 
-test1('svg nested in a div', `<div><svg></svg></div><div></div>`, b =>
-  b.element('div', b => b.element('svg')).element('div')
-);
+test('svg nested in a div', `<div><svg></svg></div><div></div>`, ['<div>', [['<svg>']]], ['<div>']);
 
-test1(
+test(
   'linearGradient preserves capitalization',
   `<svg><linearGradient id="gradient"></linearGradient></svg>`,
-  b =>
-    b.element('svg', b =>
-      b.element('linearGradient', {
-        attrs: b => b.attr('id', 'gradient'),
-      })
-    )
+  ['<svg>', [['<linearGradient>', { id: s`gradient` }]]]
 );
 
-test1('curlies separated by content whitespace', `{{a}} {{b}}`, b =>
-  b
-    .append(b.getFree('a'))
-    .text(' ')
-    .append(b.getFree('b'))
-);
+test('curlies separated by content whitespace', `{{a}} {{b}}`, '^a', s` `, '^b');
 
-test1('curlies right next to each other', `<div>{{a}}{{b}}{{c}}wat{{d}}</div>`, b =>
-  b.element('div', b =>
-    b
-      .append(b.getFree('a'))
-      .append(b.getFree('b'))
-      .append(b.getFree('c'))
-      .text('wat')
-      .append(b.getFree('d'))
-  )
-);
+test('curlies right next to each other', `<div>{{a}}{{b}}{{c}}wat{{d}}</div>`, [
+  '<div>',
+  ['^a', '^b', '^c', s`wat`, '^d'],
+]);
 
-test1('paths', `<div>{{model.foo.bar}}<span>{{model.foo.bar}}</span></div>`, b =>
-  b.element('div', b =>
-    b
-      .append(b.getFree('model', 'foo.bar'))
-      .element('span', b => b.append(b.getFree('model', 'foo.bar')))
-  )
-);
+test('paths', `<div>{{model.foo.bar}}<span>{{model.foo.bar}}</span></div>`, [
+  '<div>',
+  ['^model.foo.bar', ['<span>', ['^model.foo.bar']]],
+]);
 
-test1('whitespace', `Hello {{ foo }} `, b =>
-  b
-    .text('Hello ')
-    .append(b.getFree('foo'))
-    .text(' ')
-);
+test('whitespace', `Hello {{ foo }} `, s`Hello `, '^foo', s` `);
 
-test1('double curlies', `<div>{{title}}</div>`, b =>
-  b.element('div', b => b.append(b.getFree('title')))
-);
+test('double curlies', `<div>{{title}}</div>`, ['<div>', ['^title']]);
 
-test1('triple curlies', `<div>{{{title}}}</div>`, b =>
-  b.element('div', b => b.append(b.getFree('title'), true))
-);
+test('triple curlies', `<div>{{{title}}}</div>`, ['<div>', [[Append, '^title', true]]]);
 
-test1(
+test(
   'triple curly helpers',
   `{{{unescaped "<strong>Yolo</strong>"}}} {{escaped "<strong>Yolo</strong>"}}`,
-  b =>
-    b
-      .append(b.helper('unescaped', ['<strong>Yolo</strong>']), true)
-      .text(' ')
-      .append(b.helper('escaped', ['<strong>Yolo</strong>']))
+  [Append, ['(^unescaped)', [s`<strong>Yolo</strong>`]], true],
+  s` `,
+  [Append, ['(^escaped)', [s`<strong>Yolo</strong>`]]]
 );
 
-test1('top level triple curlies', `{{{title}}}`, b => b.append(b.getFree('title'), true));
+test('top level triple curlies', `{{{title}}}`, [Append, '^title', true]);
 
-test1('top level table', `<table>{{{title}}}</table>`, b =>
-  b.element('table', b => b.append(b.getFree('title'), true))
-);
+test('top level table', `<table>{{{title}}}</table>`, ['<table>', [[Append, '^title', true]]]);
 
-test1(
+test(
   'X-TREME nesting',
   `{{foo}}<span>{{bar}}<a>{{baz}}<em>{{boo}}{{brew}}</em>{{bat}}</a></span><span><span>{{flute}}</span></span>{{argh}}`,
-  b =>
-    b
-      .append(b.getFree('foo'))
-      .element('span', b =>
-        b.append(b.getFree('bar')).element('a', b =>
-          b
-            .append(b.getFree('baz'))
-            .element('em', b => b.append(b.getFree('boo')).append(b.getFree('brew')))
-            .append(b.getFree('bat'))
-        )
-      )
-      .element('span', b => b.element('span', b => b.append(b.getFree('flute'))))
-      .append(b.getFree('argh'))
+  '^foo',
+  ['<span>', ['^bar', ['<a>', ['^baz', ['<em>', ['^boo', '^brew']], '^bat']]]],
+  ['<span>', [['<span>', ['^flute']]]],
+  '^argh'
 );
 
-test1('simple blocks', `<div>{{#if admin}}<p>{{user}}</p>{{/if}}!</div>`, b =>
-  b.element('div', b =>
-    b
-      .block('if', {
-        params: [b.getFree('admin')],
-        block: (b: InlineBlockBuilder) => b.element('p', b => b.append(b.getFree('user'))),
-      })
-      .text('!')
-  )
-);
+test('simple blocks', `<div>{{#if admin}}<p>{{user}}</p>{{/if}}!</div>`, [
+  '<div>',
+  [['#^if', ['^admin'], [['<p>', ['^user']]]], s`!`],
+]);
 
-test1('nested blocks', `<div>{{#if admin}}{{#if access}}<p>{{user}}</p>{{/if}}{{/if}}!</div>`, b =>
-  b.element('div', b =>
-    b
-      .block('if', {
-        params: [b.getFree('admin')],
-        block: b =>
-          b.block('if', {
-            params: [b.getFree('access')],
-            block: b => b.element('p', b => b.append(b.getFree('user'))),
-          }),
-      })
-      .text('!')
-  )
-);
+test('nested blocks', `<div>{{#if admin}}{{#if access}}<p>{{user}}</p>{{/if}}{{/if}}!</div>`, [
+  '<div>',
+  [['#^if', ['^admin'], [['#^if', ['^access'], [['<p>', ['^user']]]]]], s`!`],
+]);
 
-test1(
+test(
   'loops',
   `<div>{{#each people key="handle" as |p|}}<span>{{p.handle}}</span> - {{p.name}}{{/each}}</div>`,
-  b =>
-    b.element('div', el =>
-      el.block('each', {
-        params: [el.getFree('people')],
-        hash: { key: 'handle' },
-        locals: ['p'],
-        block: block =>
-          block
-            .element('span', b => b.append(block.getLocal('p', 'handle')))
-            .text(' - ')
-            .append(block.getLocal('p', 'name')),
-      })
-    )
+  [
+    '<div>',
+    [
+      [
+        '#^each',
+        ['^people'],
+        { key: s`handle`, as: 'p' },
+        [['<span>', ['p.handle']], s` - `, 'p.name'],
+      ],
+    ],
+  ]
 );
 
-test1('simple helpers', `<div>{{testing title}}</div>`, b =>
-  b.element('div', b => b.append(b.helper('testing', [b.getFree('title')])))
+test('simple helpers', `<div>{{testing title}}</div>`, [
+  '<div>',
+  [[Append, ['(^testing)', ['^title']]]],
+]);
+
+test('constant negative numbers', `<div>{{testing -123321}}</div>`, [
+  '<div>',
+  [['(^testing)', [-123321]]],
+]);
+
+test(
+  'Large numeric literals (Number.MAX_SAFE_INTEGER)',
+  '<div>{{testing 9007199254740991}}</div>',
+  ['<div>', [['(^testing)', [9007199254740991]]]]
 );
 
-test1('constant negative numbers', `<div>{{testing -123321}}</div>`, b =>
-  b.element('div', b => b.append(b.helper('testing', [-123321])))
+test('Constant float numbers can render', `<div>{{testing 0.123}}</div>`, [
+  '<div>',
+  [['(^testing)', [0.123]]],
+]);
+
+test(
+  'GH#13999 The compiler can handle simple helpers with inline null parameter',
+  `<div>{{say-hello null}}</div>`,
+  ['<div>', [['(^say-hello)', [null]]]]
 );
 
-// @test
-// 'Constant negative numbers can render'() {
-//   this.registerHelper('testing', ([id]) => id);
-//   this.render('<div>{{testing -123321}}</div>');
-//   this.assertHTML('<div>-123321</div>');
-//   this.assertStableRerender();
-// }
+test(
+  'GH#13999 The compiler can handle simple helpers with inline string literal null parameter',
+  `<div>{{say-hello "null"}}</div>`,
+  ['<div>', [['(^say-hello)', [s`null`]]]]
+);
 
-// @test
-// 'Large numeric literals (Number.MAX_SAFE_INTEGER)'() {
-//   this.registerHelper('testing', ([id]) => id);
-//   this.render('<div>{{testing 9007199254740991}}</div>');
-//   this.assertHTML('<div>9007199254740991</div>');
-//   this.assertStableRerender();
-// }
+test(
+  'GH#13999 The compiler can handle simple helpers with inline undefined parameter',
+  `<div>{{say-hello undefined}}</div>`,
+  ['<div>', [['(^say-hello)', [undefined]]]]
+);
 
-// @test
-// 'Constant float numbers can render'() {
-//   this.registerHelper('testing', ([id]) => id);
-//   this.render('<div>{{testing 0.123}}</div>');
-//   this.assertHTML('<div>0.123</div>');
-//   this.assertStableRerender();
-// }
+test(
+  'GH#13999 The compiler can handle simple helpers with inline undefined string literal parameter',
+  `<div>{{say-hello "undefined"}}</div>`,
+  ['<div>', [['(^say-hello)', [s`undefined`]]]]
+);
 
-// @test
-// 'GH#13999 The compiler can handle simple helpers with inline null parameter'() {
-//   let value;
-//   this.registerHelper('say-hello', function(params) {
-//     value = params[0];
-//     return 'hello';
-//   });
-//   this.render('<div>{{say-hello null}}</div>');
-//   this.assertHTML('<div>hello</div>');
-//   this.assert.strictEqual(value, null, 'is null');
-//   this.assertStableRerender();
-// }
+test(
+  'GH#13999 The compiler can handle simple helpers with undefined named arguments',
+  `<div>{{say-hello foo=undefined}}</div>`,
+  ['<div>', [['(^say-hello)', { foo: undefined }]]]
+);
 
-// @test
-// 'GH#13999 The compiler can handle simple helpers with inline string literal null parameter'() {
-//   let value;
-//   this.registerHelper('say-hello', function(params) {
-//     value = params[0];
-//     return 'hello';
-//   });
+test(
+  'GH#13999 The compiler can handle simple helpers with undefined string named arguments',
+  `<div>{{say-hello foo="undefined"}}</div>`,
+  ['<div>', [['(^say-hello)', { foo: s`undefined` }]]]
+);
 
-//   this.render('<div>{{say-hello "null"}}</div>');
-//   this.assertHTML('<div>hello</div>');
-//   this.assert.strictEqual(value, 'null', 'is null string literal');
-//   this.assertStableRerender();
-// }
+test(
+  'GH#13999 The compiler can handle simple helpers with null named arguments',
+  `<div>{{say-hello foo=null}}</div>`,
+  ['<div>', [['(^say-hello)', { foo: null }]]]
+);
 
-// @test
-// 'GH#13999 The compiler can handle simple helpers with inline undefined parameter'() {
-//   let value: unknown = 'PLACEHOLDER';
-//   let length;
-//   this.registerHelper('say-hello', function(params) {
-//     length = params.length;
-//     value = params[0];
-//     return 'hello';
-//   });
+test(
+  'GH#13999 The compiler can handle simple helpers with null string named arguments',
+  `<div>{{say-hello foo="null"}}</div>`,
+  ['<div>', [['(^say-hello)', { foo: s`null` }]]]
+);
 
-//   this.render('<div>{{say-hello undefined}}</div>');
-//   this.assertHTML('<div>hello</div>');
-//   this.assert.strictEqual(length, 1);
-//   this.assert.strictEqual(value, undefined, 'is undefined');
-//   this.assertStableRerender();
-// }
+test('Null curly in attributes', `<div class="foo {{null}}">hello</div>`, [
+  '<div>',
+  { class: [Concat, s`foo `, null] },
+  [s`hello`],
+]);
 
-// @test
-// 'GH#13999 The compiler can handle simple helpers with positional parameter undefined string literal'() {
-//   let value: unknown = 'PLACEHOLDER';
-//   let length;
-//   this.registerHelper('say-hello', function(params) {
-//     length = params.length;
-//     value = params[0];
-//     return 'hello';
-//   });
+test('Null as a block argument', `{{#if null}}NOPE{{else}}YUP{{/if}}`, [
+  '#^if',
+  [null],
+  { default: [s`NOPE`], else: [s`YUP`] },
+]);
 
-//   this.render('<div>{{say-hello "undefined"}} undefined</div>');
-//   this.assertHTML('<div>hello undefined</div>');
-//   this.assert.strictEqual(length, 1);
-//   this.assert.strictEqual(value, 'undefined', 'is undefined string literal');
-//   this.assertStableRerender();
-// }
+test('Sexp expressions', `<div>{{testing (testing "hello")}}</div>`, [
+  '<div>',
+  [['(^testing)', [['(^testing)', [s`hello`]]]]],
+]);
 
-// @test
-// 'GH#13999 The compiler can handle components with undefined named arguments'() {
-//   let value: unknown = 'PLACEHOLDER';
-//   this.registerHelper('say-hello', function(_, hash) {
-//     value = hash['foo'];
-//     return 'hello';
-//   });
+test(
+  'Multiple invocations of the same sexp',
+  `<div>{{testing (testing "hello" foo) (testing (testing bar "lol") baz)}}</div>`,
+  [
+    '<div>',
+    [
+      [
+        '(^testing)',
+        [
+          ['(^testing)', [s`hello`, '^foo']],
+          ['(^testing)', [['(^testing)', ['^bar', s`lol`]], '^baz']],
+        ],
+      ],
+    ],
+  ]
+);
 
-//   this.render('<div>{{say-hello foo=undefined}}</div>');
-//   this.assertHTML('<div>hello</div>');
-//   this.assert.strictEqual(value, undefined, 'is undefined');
-//   this.assertStableRerender();
-// }
+test('hash arguments', `<div>{{testing first="one" second="two"}}</div>`, [
+  '<div>',
+  [['(^testing)', { first: s`one`, second: s`two` }]],
+]);
 
-// @test
-// 'GH#13999 The compiler can handle components with undefined string literal named arguments'() {
-//   let value: unknown = 'PLACEHOLDER';
-//   this.registerHelper('say-hello', function(_, hash) {
-//     value = hash['foo'];
-//     return 'hello';
-//   });
+test('params in concat attribute position', `<a href="{{testing url}}">linky</a>`, [
+  '<a>',
+  { href: [Concat, ['(^testing)', ['^url']]] },
+  [s`linky`],
+]);
 
-//   this.render('<div>{{say-hello foo="undefined"}}</div>');
-//   this.assertHTML('<div>hello</div>');
-//   this.assert.strictEqual(value, 'undefined', 'is undefined string literal');
-//   this.assertStableRerender();
-// }
+test('named args in concat attribute position', `<a href="{{testing path=url}}">linky</a>`, [
+  '<a>',
+  { href: [Concat, ['(^testing)', { path: '^url' }]] },
+  [s`linky`],
+]);
 
-// @test
-// 'GH#13999 The compiler can handle components with null named arguments'() {
-//   let value;
-//   this.registerHelper('say-hello', function(_, hash) {
-//     value = hash['foo'];
-//     return 'hello';
-//   });
+test(
+  'multiple helpers in concat position',
+  `<a href="http://{{foo}}/{{testing bar}}/{{testing "baz"}}">linky</a>`,
+  [
+    '<a>',
+    {
+      href: [
+        Concat,
+        s`http://`,
+        '^foo',
+        s`/`,
+        ['(^testing)', ['^bar']],
+        s`/`,
+        ['(^testing)', [s`baz`]],
+      ],
+    },
+    [s`linky`],
+  ]
+);
 
-//   this.render('<div>{{say-hello foo=null}}</div>');
-//   this.assertHTML('<div>hello</div>');
-//   this.assert.strictEqual(value, null, 'is null');
-//   this.assertStableRerender();
-// }
+test('elements inside a yielded block', `{{#identity}}<div id="test">123</div>{{/identity}}`, [
+  '#^identity',
+  [['<div>', { id: s`test` }, [s`123`]]],
+]);
 
-// @test
-// 'GH#13999 The compiler can handle components with null string literal named arguments'() {
-//   let value;
-//   this.registerHelper('say-hello', function(_, hash) {
-//     value = hash['foo'];
-//     return 'hello';
-//   });
+test('a simple block helper with inverse', `{{#identity}}test{{else}}not shown{{/identity}}`, [
+  '#^identity',
+  { default: [s`test`], else: [s`not shown`] },
+]);
 
-//   this.render('<div>{{say-hello foo="null"}}</div>');
-//   this.assertHTML('<div>hello</div>');
-//   this.assert.strictEqual(value, 'null', 'is null string literal');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Null curly in attributes'() {
-//   this.render('<div class="foo {{null}}">hello</div>');
-//   this.assertHTML('<div class="foo ">hello</div>');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Null in primitive syntax'() {
-//   this.render('{{#if null}}NOPE{{else}}YUP{{/if}}');
-//   this.assertHTML('YUP');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Sexpr helpers'() {
-//   this.registerHelper('testing', function(params) {
-//     return params[0] + '!';
-//   });
-
-//   this.render('<div>{{testing (testing "hello")}}</div>');
-//   this.assertHTML('<div>hello!!</div>');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'The compiler can handle multiple invocations of sexprs'() {
-//   this.registerHelper('testing', function(params) {
-//     return '' + params[0] + params[1];
-//   });
-
-//   this.render('<div>{{testing (testing "hello" foo) (testing (testing bar "lol") baz)}}</div>', {
-//     foo: 'FOO',
-//     bar: 'BAR',
-//     baz: 'BAZ',
-//   });
-//   this.assertHTML('<div>helloFOOBARlolBAZ</div>');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'The compiler passes along the hash arguments'() {
-//   this.registerHelper('testing', function(_, hash) {
-//     return hash['first'] + '-' + hash['second'];
-//   });
-
-//   this.render('<div>{{testing first="one" second="two"}}</div>');
-//   this.assertHTML('<div>one-two</div>');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Attributes can be populated with helpers that generate a string'() {
-//   this.registerHelper('testing', function(params) {
-//     return params[0];
-//   });
-
-//   this.render('<a href="{{testing url}}">linky</a>', { url: 'linky.html' });
-//   this.assertHTML('<a href="linky.html">linky</a>');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Attribute helpers take a hash'() {
-//   this.registerHelper('testing', function(_, hash) {
-//     return hash['path'];
-//   });
-
-//   this.render('<a href="{{testing path=url}}">linky</a>', { url: 'linky.html' });
-//   this.assertHTML('<a href="linky.html">linky</a>');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Attributes containing multiple helpers are treated like a block'() {
-//   this.registerHelper('testing', function(params) {
-//     return params[0];
-//   });
-
-//   this.render('<a href="http://{{foo}}/{{testing bar}}/{{testing "baz"}}">linky</a>', {
-//     foo: 'foo.com',
-//     bar: 'bar',
-//   });
-//   this.assertHTML('<a href="http://foo.com/bar/baz">linky</a>');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'Elements inside a yielded block'() {
-//   this.render('{{#identity}}<div id="test">123</div>{{/identity}}');
-//   this.assertHTML('<div id="test">123</div>');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'A simple block helper can return text'() {
-//   this.render('{{#identity}}test{{else}}not shown{{/identity}}');
-//   this.assertHTML('test');
-//   this.assertStableRerender();
-// }
-
-// @test
-// 'A block helper can have an else block'() {
-//   this.render('{{#render-else}}Nope{{else}}<div id="test">123</div>{{/render-else}}');
-//   this.assertHTML('<div id="test">123</div>');
-//   this.assertStableRerender();
-// }
+test(
+  'a more involved block',
+  `{{#render-else}}Nope{{else}}<div id="test">123</div>{{/render-else}}`,
+  ['#^render-else', { default: [s`Nope`], else: [['<div>', { id: s`test` }, [s`123`]]] }]
+);

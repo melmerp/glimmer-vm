@@ -105,7 +105,7 @@ export class SymbolAllocator implements Processor<AllocateSymbolsOps> {
 
   getVar(name: string): Op<JavaScriptCompilerOps, 'getSymbol' | 'getFree'> {
     if (this.symbols.has(name)) {
-      let symbol = this.symbols.allocate(name);
+      let symbol = this.symbols.get(name);
       return ['getSymbol', symbol];
     } else {
       let symbol = this.symbols.allocateFree(name);

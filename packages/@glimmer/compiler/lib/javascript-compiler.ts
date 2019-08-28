@@ -18,6 +18,7 @@ import {
 export type str = string;
 import Core = WireFormat.Core;
 export type Params = WireFormat.Core.Params;
+export type ConcatParams = WireFormat.Core.ConcatParams;
 export type Hash = WireFormat.Core.Hash;
 export type Path = WireFormat.Core.Path;
 export type StackValue = WireFormat.Expression | Params | Hash | str;
@@ -410,7 +411,7 @@ export default class JavaScriptCompiler implements Processor<JavaScriptCompilerO
   }
 
   concat() {
-    this.pushValue<Expressions.Concat>([SexpOpcodes.Concat, this.popValue<Params>()]);
+    this.pushValue<Expressions.Concat>([SexpOpcodes.Concat, this.popValue<ConcatParams>()]);
   }
 
   helper() {
