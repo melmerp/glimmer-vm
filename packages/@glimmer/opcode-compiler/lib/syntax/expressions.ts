@@ -60,7 +60,9 @@ EXPRESSIONS.add(SexpOpcodes.GetContextualFree, ([, head, context]) =>
 );
 
 EXPRESSIONS.add(SexpOpcodes.Undefined, () => pushPrimitiveReference(undefined));
-EXPRESSIONS.add(SexpOpcodes.HasBlock, ([, symbol]) => [op('Expr', symbol), op(Op.HasBlock)]);
+EXPRESSIONS.add(SexpOpcodes.HasBlock, ([, symbol]) => {
+  return [op('Expr', symbol), op(Op.HasBlock)];
+});
 
 EXPRESSIONS.add(SexpOpcodes.HasBlockParams, ([, symbol]) => [
   op('Expr', symbol),

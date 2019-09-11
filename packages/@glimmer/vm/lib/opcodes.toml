@@ -140,19 +140,19 @@ notes = "TODO: The three elements on the stack can be null"
 
 [syscall.hasblockload]
 
-format = ["HasBlock", "block:u32"]
+format = ["HasBlock"]
 operation = """
 Push TRUE onto the stack if the specified block
 is bound and FALSE if it is not.
 """
 operand-stack = [
-  [],
+  ["block?"],
   ["bool"]
 ]
 
 [syscall.hasparamsload]
 
-format = ["HasBlockParams", "block:u32"]
+format = ["HasBlockParams"]
 operation = """
 Push TRUE onto the stack if the specified block
 is bound *and* has at least one specified formal

@@ -29,6 +29,7 @@ interface Symbols {
   arg(name: string): number;
   block(name: string): number;
   local(name: string): number;
+  this(): number;
 
   hasLocal(name: string): boolean;
 
@@ -63,6 +64,10 @@ export class ProgramSymbols implements Symbols {
 
   local(name: string): never {
     throw new Error(`No local ${name} was found. Maybe you meant ^${name}?`);
+  }
+
+  this(): number {
+    return 0;
   }
 
   hasLocal(_name: string): false {
@@ -114,6 +119,10 @@ class LocalSymbols implements Symbols {
     } else {
       return this.parent.local(name);
     }
+  }
+
+  this(): number {
+    return this.parent.this();
   }
 
   hasLocal(name: string): boolean {
@@ -182,7 +191,7 @@ export function buildStatement(
       return [
         [
           Op.Append,
-          buildPath(normalized.path, ExpressionContext.None, symbols),
+          buildPath(normalized.path, ExpressionContext.AppendSingleId, symbols),
           normalized.trusted,
         ],
       ];
@@ -192,7 +201,7 @@ export function buildStatement(
       return [
         [
           Op.Append,
-          buildExpression(normalized.expr, ExpressionContext.None, symbols),
+          buildExpression(normalized.expr, ExpressionContext.Expression, symbols),
           normalized.trusted,
         ],
       ];
@@ -314,7 +323,7 @@ export function buildAngleInvocation(
 
   return [
     Op.DynamicComponent,
-    buildExpression(head, ExpressionContext.None, symbols),
+    buildExpression(head, ExpressionContext.CallHead, symbols),
     attrList,
     args,
     [['default'], [{ parameters: [], statements: blockList }]],
@@ -336,7 +345,7 @@ export function buildAttrs(
       attributes.push([Op.AttrSplat, symbols.block('&attrs')]);
     } else if (key[0] === '@') {
       keys.push(key);
-      values.push(buildExpression(value, ExpressionContext.None, symbols));
+      values.push(buildExpression(value, ExpressionContext.Expression, symbols));
     } else {
       attributes.push(
         ...buildAttributeValue(
@@ -401,7 +410,12 @@ export function buildAttributeValue(
 
     default:
       return [
-        [Op.DynamicAttr, name, buildExpression(value, ExpressionContext.None, symbols), namespace],
+        [
+          Op.DynamicAttr,
+          name,
+          buildExpression(value, ExpressionContext.AppendSingleId, symbols),
+          namespace,
+        ],
       ];
   }
 }
@@ -431,14 +445,22 @@ export function buildExpression(
     case ExpressionKind.HasBlock: {
       return [
         Op.HasBlock,
-        buildVar({ kind: VariableKind.Block, name: expr.name }, ExpressionContext.None, symbols),
+        buildVar(
+          { kind: VariableKind.Block, name: expr.name },
+          ExpressionContext.Expression,
+          symbols
+        ),
       ];
     }
 
     case ExpressionKind.HasBlockParams: {
       return [
         Op.HasBlockParams,
-        buildVar({ kind: VariableKind.Block, name: expr.name }, ExpressionContext.None, symbols),
+        buildVar(
+          { kind: VariableKind.Block, name: expr.name },
+          ExpressionContext.Expression,
+          symbols
+        ),
       ];
     }
 
@@ -456,7 +478,11 @@ export function buildPath(
   context: ExpressionContext,
   symbols: Symbols
 ): Expressions.GetPath {
-  return [Op.GetPath, buildVar(path.variable, context, symbols), path.tail];
+  if (path.tail.length === 0) {
+    return [Op.GetPath, buildVar(path.variable, context, symbols), path.tail];
+  } else {
+    return [Op.GetPath, buildVar(path.variable, ExpressionContext.Expression, symbols), path.tail];
+  }
 }
 
 export function buildVar(
@@ -473,6 +499,8 @@ export function buildVar(
       return [Op.GetSymbol, symbols.block(head.name)];
     case VariableKind.Local:
       return [Op.GetSymbol, symbols.local(head.name)];
+    case VariableKind.This:
+      return [Op.GetSymbol, symbols.this()];
   }
 }
 
@@ -482,7 +510,7 @@ export function buildParams(
 ): Option<WireFormat.Core.Params> {
   if (exprs === null) return null;
 
-  return exprs.map(e => buildExpression(e, ExpressionContext.None, symbols));
+  return exprs.map(e => buildExpression(e, ExpressionContext.Expression, symbols));
 }
 
 export function buildConcat(
@@ -490,7 +518,7 @@ export function buildConcat(
   symbols: Symbols
 ): WireFormat.Core.ConcatParams {
   return exprs.map(e =>
-    buildExpression(e, ExpressionContext.None, symbols)
+    buildExpression(e, ExpressionContext.AppendSingleId, symbols)
   ) as WireFormat.Core.ConcatParams;
 }
 
@@ -501,7 +529,7 @@ export function buildHash(exprs: Option<NormalizedHash>, symbols: Symbols): Wire
 
   Object.keys(exprs).forEach(key => {
     out[0].push(key);
-    out[1].push(buildExpression(exprs[key], ExpressionContext.None, symbols));
+    out[1].push(buildExpression(exprs[key], ExpressionContext.Expression, symbols));
   });
 
   return out;

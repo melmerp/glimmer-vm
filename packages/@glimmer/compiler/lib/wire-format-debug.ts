@@ -108,7 +108,7 @@ export default class WireFormatDebugger {
           ];
 
         case Op.GetSymbol:
-          return ['get-symbol', opcode[1]];
+          return ['get-symbol', this.program.symbols[opcode[1]], opcode[1]];
 
         case Op.GetFree:
           return ['get-free', this.program.upvars[opcode[1]]];

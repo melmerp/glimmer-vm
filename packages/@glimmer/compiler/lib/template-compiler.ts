@@ -98,12 +98,10 @@ export default class TemplateCompiler implements Processor<InputOps> {
 
     let actionIsComponent = false;
 
-    if (isDynamicComponent(action)) {
-      let head: PathHead, rest: string[];
-      [head, ...rest] = action.tag.split('.');
+    let dynamic = destructureDynamicComponent(action);
 
-      this.path(head, rest, ExpressionContext.None, action);
-
+    if (dynamic) {
+      this.expression(dynamic, ExpressionContext.ComponentHead, action);
       this.opcode(['openComponent', action], action);
       actionIsComponent = true;
     } else if (isNamedBlock(action)) {
@@ -142,7 +140,7 @@ export default class TemplateCompiler implements Processor<InputOps> {
   closeElement([action]: [AST.ElementNode]) {
     if (isNamedBlock(action)) {
       this.opcode(['closeNamedBlock', action]);
-    } else if (isDynamicComponent(action)) {
+    } else if (!!destructureDynamicComponent(action)) {
       this.opcode(['closeDynamicComponent', action], action);
     } else if (isComponent(action)) {
       this.opcode(['closeComponent', action], action);
@@ -204,7 +202,7 @@ export default class TemplateCompiler implements Processor<InputOps> {
     let { path } = mustache;
 
     if (isLiteral(path)) {
-      this.expression(mustache.path, ExpressionContext.None, mustache);
+      this.expression(mustache.path, ExpressionContext.Expression, mustache);
       this.opcode(['append', !mustache.escaped], mustache);
     } else if (path.type !== 'PathExpression') {
       throw new SyntaxError(`Expected PathExpression, got ${path.type}`, path.loc);
@@ -223,7 +221,7 @@ export default class TemplateCompiler implements Processor<InputOps> {
       this.opcode(['helper'], mustache);
       this.opcode(['append', !mustache.escaped], mustache);
     } else {
-      this.expression(mustache.path, ExpressionContext.None, mustache);
+      this.expression(mustache.path, mustacheContext(mustache.path), mustache);
       this.opcode(['append', !mustache.escaped], mustache);
     }
   }
@@ -238,15 +236,13 @@ export default class TemplateCompiler implements Processor<InputOps> {
 
   /// Internal actions, not found in the original processed actions
 
-  private path(head: string, rest: string[], context: ExpressionContext, loc: AST.BaseNode) {
-    if (head === 'this') {
-      this.thisPath(rest, loc);
-    } else if (head[0] === '@') {
-      this.argPath(head, rest, loc);
-    } else {
-      this.varPath(head, rest, context, loc);
-    }
-  }
+  // private path(head: string, rest: string[], context: ExpressionContext, loc: AST.BaseNode) {
+  //   if (head[0] === '@') {
+  //     this.argPath(head, rest, loc);
+  //   } else {
+  //     this.varPath(head, rest, context, loc);
+  //   }
+  // }
 
   private argPath(head: string, rest: string[], loc: AST.BaseNode) {
     this.opcode(['getArg', head.slice(1)], loc);
@@ -270,11 +266,8 @@ export default class TemplateCompiler implements Processor<InputOps> {
       throw new SyntaxError(`Expected PathExpression, got ${path.type}`, path.loc);
     } else if (isKeyword(expr)) {
       this.keyword(expr as AST.Call);
-    } else if (path.this) {
-      throw new Error(`Unexpected path.this in ${JSON.stringify(path)} in ${JSON.stringify(expr)}`);
     } else {
-      let [head, ...rest] = path.parts;
-      this.path(head, rest, context, expr);
+      this.path(path, context);
     }
   }
 
@@ -327,8 +320,19 @@ export default class TemplateCompiler implements Processor<InputOps> {
   }
 
   PathExpression(expr: AST.PathExpression) {
+    this.path(expr, ExpressionContext.Expression);
+  }
+
+  private path(expr: AST.PathExpression, context: ExpressionContext) {
     let [head, ...rest] = expr.parts;
-    this.path(head, rest, ExpressionContext.None, expr);
+
+    if (expr.data) {
+      this.argPath(head, rest, expr);
+    } else if (expr.this) {
+      this.thisPath(expr.parts, expr);
+    } else {
+      this.varPath(head, rest, context, expr);
+    }
   }
 
   StringLiteral(action: AST.StringLiteral) {
@@ -444,12 +448,14 @@ export default class TemplateCompiler implements Processor<InputOps> {
     if (value.type === 'TextNode') {
       this.opcode(['literal', value.chars]);
       return true;
+    } else if (isKeyword(value)) {
+      this.keyword(value);
     } else if (isHelperInvocation(value)) {
       this.prepareHelper(value);
       this.expression(value.path, ExpressionContext.CallHead, value);
       this.opcode(['helper'], value);
     } else {
-      this.expression(value.path, ExpressionContext.None, value);
+      this.expression(value.path, ExpressionContext.AppendSingleId, value);
     }
 
     return false;
@@ -506,22 +512,55 @@ function isHasBlockParams(path: AST.Expression): path is AST.PathExpression {
 }
 
 function isKeyword(node: AST.Node | AST.Call): node is AST.Call {
-  if (node.type === 'SubExpression') {
+  if (isCall(node)) {
     return isHasBlock(node.path) || isHasBlockParams(node.path);
   } else {
     return false;
   }
 }
 
-function isDynamicComponent(element: AST.ElementNode): boolean {
+function isCall(node: AST.Node | AST.Call): node is AST.Call {
+  return node.type === 'SubExpression' || node.type === 'MustacheStatement';
+}
+
+function destructureDynamicComponent(element: AST.ElementNode): Option<AST.PathExpression> {
   let open = element.tag.charAt(0);
 
-  let [maybeLocal] = element.tag.split('.');
+  let [maybeLocal, ...rest] = element.tag.split('.');
   let isNamedArgument = open === '@';
   let isLocal = element.symbols!.has(maybeLocal);
-  let isThisPath = element.tag.indexOf('this.') === 0;
+  let isThisPath = maybeLocal === 'this';
 
-  return isLocal || isNamedArgument || isThisPath;
+  if (isLocal) {
+    return {
+      type: 'PathExpression',
+      data: false,
+      parts: [maybeLocal, ...rest],
+      this: false,
+      original: element.tag,
+      loc: element.loc,
+    };
+  } else if (isNamedArgument) {
+    return {
+      type: 'PathExpression',
+      data: true,
+      parts: [maybeLocal.slice(1), ...rest],
+      this: false,
+      original: element.tag,
+      loc: element.loc,
+    };
+  } else if (isThisPath) {
+    return {
+      type: 'PathExpression',
+      data: false,
+      parts: rest,
+      this: true,
+      original: element.tag,
+      loc: element.loc,
+    };
+  } else {
+    return null;
+  }
 }
 
 function isComponent(element: AST.ElementNode): boolean {
@@ -530,7 +569,7 @@ function isComponent(element: AST.ElementNode): boolean {
 
   let isUpperCase = open === open.toUpperCase() && open !== open.toLowerCase();
 
-  return (isUpperCase && !isPath) || isDynamicComponent(element);
+  return (isUpperCase && !isPath) || !!destructureDynamicComponent(element);
 }
 
 function isNamedBlock(element: AST.ElementNode): boolean {
@@ -630,5 +669,17 @@ function assertValidDebuggerUsage(statement: AST.MustacheStatement) {
     return 'default';
   } else {
     throw new SyntaxError(`debugger does not take any positional arguments`, statement.loc);
+  }
+}
+
+function mustacheContext(body: AST.Expression): ExpressionContext {
+  if (body.type === 'PathExpression') {
+    if (body.parts.length > 1 || body.data) {
+      return ExpressionContext.Expression;
+    } else {
+      return ExpressionContext.AppendSingleId;
+    }
+  } else {
+    return ExpressionContext.Expression;
   }
 }

@@ -18,7 +18,7 @@ import { compileParams } from '../opcode-builder/helpers/shared';
 import { exhausted, EMPTY_ARRAY } from '@glimmer/util';
 import { op } from '../opcode-builder/encoder';
 import { strArray } from '../opcode-builder/operands';
-import { primitive } from '../opcode-builder/helpers/vm';
+import { primitive, helper } from '../opcode-builder/helpers/vm';
 import { concatExpressions } from './concat';
 import { EXPRESSIONS } from './expressions';
 
@@ -45,14 +45,13 @@ export default function pushResolutionOp(
       break;
     }
     case HighLevelResolutionOpcode.ResolveFree: {
-      debugger;
       throw new Error('Unimplemented HighLevelResolutionOpcode.ResolveFree');
     }
     case HighLevelResolutionOpcode.ResolveContextualFree: {
       let { freeVar, context: expressionContext } = operation.op1;
 
       switch (expressionContext) {
-        case ExpressionContext.None: {
+        case ExpressionContext.Expression: {
           // in classic mode, this is always a this-fallback
           let name = context.meta.upvars![freeVar];
 
@@ -62,7 +61,33 @@ export default function pushResolutionOp(
             [op(Op.GetVariable, 0), op(Op.GetProperty, name)],
             constants
           );
+
+          break;
         }
+
+        case ExpressionContext.AppendSingleId: {
+          let resolver = context.syntax.program.resolverDelegate;
+          let name = context.meta.upvars![freeVar];
+
+          let resolvedHelper = resolver.lookupHelper(name, context.meta.referrer);
+          let expressions: ExpressionCompileActions;
+
+          if (resolvedHelper) {
+            expressions = helper({ handle: resolvedHelper, params: null, hash: null });
+          } else {
+            // in classic mode, this is always a this-fallback
+            expressions = [op(Op.GetVariable, 0), op(Op.GetProperty, name)];
+          }
+
+          concatExpressions(encoder, context, expressions, constants);
+
+          break;
+        }
+
+        default:
+          throw new Error(
+            `unimplemented: Can't evaluate expression in context ${expressionContext}`
+          );
       }
 
       break;

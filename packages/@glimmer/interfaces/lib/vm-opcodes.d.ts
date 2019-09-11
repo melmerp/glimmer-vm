@@ -102,5 +102,5 @@ export const enum Op {
   InvokePartial = 103,
   ResolveMaybeLocal = 104,
   Debugger = 105,
-  Size = 90,
+  Size = 106,
 }

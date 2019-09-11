@@ -375,11 +375,14 @@ export default class JavaScriptCompiler implements Processor<JavaScriptCompilerO
   }
 
   hasBlock(name: number) {
-    this.pushValue<Expressions.HasBlock>([SexpOpcodes.HasBlock, name]);
+    this.pushValue<Expressions.HasBlock>([SexpOpcodes.HasBlock, [SexpOpcodes.GetSymbol, name]]);
   }
 
   hasBlockParams(name: number) {
-    this.pushValue<Expressions.HasBlockParams>([SexpOpcodes.HasBlockParams, name]);
+    this.pushValue<Expressions.HasBlockParams>([
+      SexpOpcodes.HasBlockParams,
+      [SexpOpcodes.GetSymbol, name],
+    ]);
   }
 
   partial(evalInfo: Option<Core.EvalInfo>) {

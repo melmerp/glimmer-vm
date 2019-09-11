@@ -98,10 +98,9 @@ APPEND_OPCODES.add(Op.GetBlock, (vm, { op1: _block }) => {
   }
 });
 
-APPEND_OPCODES.add(Op.HasBlock, (vm, { op1: _block }) => {
-  let hasBlock = !!vm.scope().getBlock(_block);
-  vm.stack.push(hasBlock ? TRUE_REFERENCE : FALSE_REFERENCE);
-});
+APPEND_OPCODES.add(Op.HasBlock, vm =>
+  vm.stack.push(!!vm.stack.pop() ? TRUE_REFERENCE : FALSE_REFERENCE)
+);
 
 APPEND_OPCODES.add(Op.HasBlockParams, vm => {
   // FIXME(mmun): should only need to push the symbol table

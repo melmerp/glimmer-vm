@@ -103,10 +103,20 @@ export namespace Core {
 }
 
 export const enum ExpressionContext {
-  None = 'None',
+  // An `Append` is a single identifier that is contained inside a curly (either in a
+  // content curly or an attribute curly)
+  AppendSingleId = 'AppendSingleId',
+  // An `Expression` is evaluated into a value (e.g. `person.name` in `(call person.name)`
+  // or `person.name` in `@name={{person.name}}`). This represents a syntactic position
+  // that must evaluate as an expression by virtue of its position in the syntax.
+  Expression = 'Expression',
+  // A `CallHead` is the head of an expression that is definitely a call
   CallHead = 'CallHead',
+  // A `BlockHead` is the head of an expression that is definitely a block
   BlockHead = 'BlockHead',
+  // A `ModifierHead` is the head of an expression that is definitely a modifir
   ModifierHead = 'ModifierHead',
+  // A `ComponentHead` is the head of an expression that is definitely a component
   ComponentHead = 'ComponentHead',
 }
 

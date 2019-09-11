@@ -60,6 +60,12 @@ test('Text curlies', '<div>{{title}}<span>{{title}}</span></div>', [
   [[Append, '^title'], ['<span>', [[Append, '^title']]]],
 ]);
 
+test(
+  `Smoke test (blocks don't produce 'this' fallback)`,
+  `{{#with person as |name|}}{{#with this.name as |test|}}{{test}}{{/with}}{{/with}}`,
+  ['#^with', ['^person'], { as: 'name' }, [['#^with', ['this.name'], { as: 'test' }, ['test']]]]
+);
+
 // test(
 //   'Smoke test (integration, basic)',
 //   '<div ...attributes><@foo @staticNamedArg="static" data-test1={{@outerArg}} data-test2="static" @dynamicNamedArg={{@outerArg}} /></div>',
