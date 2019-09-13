@@ -131,6 +131,16 @@ export class Inlines implements MacroInlines {
       name = expectString(value[1], context.meta, 'Expected head of call to be a string');
       params = value[2];
       hash = value[3];
+    } else if (value[0] === SexpOpcodes.GetPath) {
+      let pathName = simplePathName(value, context.meta);
+
+      if (pathName === null) {
+        return UNHANDLED;
+      }
+
+      name = pathName;
+      params = null;
+      hash = null;
     } else {
       return UNHANDLED;
     }
@@ -152,4 +162,19 @@ export class Inlines implements MacroInlines {
       return UNHANDLED;
     }
   }
+}
+
+function simplePathName(
+  [, get, tail]: WireFormat.Expressions.GetPath,
+  meta: ContainingMetadata
+): Option<string> {
+  if (tail.length > 0) {
+    return null;
+  }
+
+  if (get[0] === SexpOpcodes.GetFree || get[0] === SexpOpcodes.GetContextualFree) {
+    return meta.upvars![get[1]];
+  }
+
+  return null;
 }

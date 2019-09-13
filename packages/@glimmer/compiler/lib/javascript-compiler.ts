@@ -234,6 +234,7 @@ export default class JavaScriptCompiler implements Processor<JavaScriptCompilerO
   }
 
   modifier() {
+    let name = this.popValue<Expression>();
     let params = this.popValue<Params>();
     let hash = this.popValue<Hash>();
     this.push([SexpOpcodes.Modifier, name, params, hash]);

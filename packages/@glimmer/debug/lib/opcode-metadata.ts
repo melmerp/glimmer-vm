@@ -229,7 +229,7 @@ METADATA[Op.GetBlock] = {
   name: 'GetBlock',
   mnemonic: 'blockload',
   before: null,
-  stackChange: 3,
+  stackChange: 1,
   ops: [
     {
       name: 'block',
@@ -237,6 +237,16 @@ METADATA[Op.GetBlock] = {
     },
   ],
   operands: 1,
+  check: true,
+};
+
+METADATA[Op.JitSpreadBlock] = {
+  name: 'JitSpreadBlock',
+  mnemonic: 'blockspread',
+  before: null,
+  stackChange: 2,
+  ops: [],
+  operands: 0,
   check: true,
 };
 
@@ -254,7 +264,7 @@ METADATA[Op.HasBlockParams] = {
   name: 'HasBlockParams',
   mnemonic: 'hasparamsload',
   before: null,
-  stackChange: -2,
+  stackChange: 0,
   ops: [],
   operands: 0,
   check: true,

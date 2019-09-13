@@ -15,6 +15,7 @@ export function compileInline(
   sexp: Statements.Append,
   context: TemplateCompilationContext
 ): StatementCompileActions | Unhandled {
+  debugger;
   return context.syntax.macros.inlines.compile(sexp, context);
 }
 

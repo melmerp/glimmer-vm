@@ -146,6 +146,12 @@ STATEMENTS.add(SexpOpcodes.Debugger, ([, evalInfo], meta) =>
 );
 
 STATEMENTS.add(SexpOpcodes.Append, sexp => {
+  let [, value, trusted] = sexp;
+
+  if (typeof value === 'string' && trusted) {
+    return op(Op.Text, value);
+  }
+
   return op('CompileInline', {
     inline: sexp,
     ifUnhandled: () => [

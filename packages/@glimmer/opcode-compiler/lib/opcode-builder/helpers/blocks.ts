@@ -21,6 +21,7 @@ export function yieldBlock(
   return [
     op('SimpleArgs', { params, hash: null, atNames: true }),
     op(Op.GetBlock, to),
+    op(Op.JitSpreadBlock),
     op('Option', op('JitCompileBlock')),
     op(Op.InvokeYield),
     op(Op.PopScope),

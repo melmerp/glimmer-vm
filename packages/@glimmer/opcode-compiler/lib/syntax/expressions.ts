@@ -1,5 +1,11 @@
 import { ExpressionCompilers } from './compilers';
-import { SexpOpcodes, ResolveHandle, Op, Expressions } from '@glimmer/interfaces';
+import {
+  SexpOpcodes,
+  ResolveHandle,
+  Op,
+  Expressions,
+  ContainingMetadata,
+} from '@glimmer/interfaces';
 import { op } from '../opcode-builder/encoder';
 import { helper, pushPrimitiveReference } from '../opcode-builder/helpers/vm';
 import { assert } from '@glimmer/util';
@@ -22,7 +28,7 @@ EXPRESSIONS.add(SexpOpcodes.Concat, ([, parts]) => {
 
 EXPRESSIONS.add(SexpOpcodes.Call, ([, name, params, hash], meta) => {
   // TODO: triage this in the WF compiler
-  if (name === 'component') {
+  if (isComponent(name, meta)) {
     assert(
       params && params.length,
       'SYNTAX ERROR: component helper requires at least one argument'
@@ -47,6 +53,28 @@ EXPRESSIONS.add(SexpOpcodes.Call, ([, name, params, hash], meta) => {
   });
 });
 
+function isComponent(expr: Expressions.Expression, meta: ContainingMetadata): boolean {
+  if (!Array.isArray(expr)) {
+    return false;
+  }
+
+  if (expr[0] === SexpOpcodes.GetPath) {
+    let head = expr[1];
+
+    if (
+      head[0] === SexpOpcodes.GetContextualFree &&
+      meta.upvars &&
+      meta.upvars[head[1]] === 'component'
+    ) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  return false;
+}
+
 EXPRESSIONS.add(SexpOpcodes.GetSymbol, ([, head]) => [op(Op.GetVariable, head)]);
 
 EXPRESSIONS.add(SexpOpcodes.GetPath, ([, head, tail]) => {
@@ -60,13 +88,13 @@ EXPRESSIONS.add(SexpOpcodes.GetContextualFree, ([, head, context]) =>
 );
 
 EXPRESSIONS.add(SexpOpcodes.Undefined, () => pushPrimitiveReference(undefined));
-EXPRESSIONS.add(SexpOpcodes.HasBlock, ([, symbol]) => {
-  return [op('Expr', symbol), op(Op.HasBlock)];
+EXPRESSIONS.add(SexpOpcodes.HasBlock, ([, block]) => {
+  return [op('Expr', block), op(Op.HasBlock)];
 });
 
-EXPRESSIONS.add(SexpOpcodes.HasBlockParams, ([, symbol]) => [
-  op('Expr', symbol),
-  op(Op.GetBlock),
+EXPRESSIONS.add(SexpOpcodes.HasBlockParams, ([, block]) => [
+  op('Expr', block),
+  op(Op.JitSpreadBlock),
   op('JitCompileBlock'),
   op(Op.HasBlockParams),
 ]);
